@@ -38,6 +38,7 @@
 
 
     <!-- 终端侧栏和快捷操作 -->
+    <string name="drawer_title">Termux Fork</string>
     <string name="action_new_session">新建会话</string>
     <string name="action_new_session_failsafe">安全模式</string>
     <string name="title_max_terminals_reached">已达最大终端数</string>

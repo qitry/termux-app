@@ -1,8 +1,8 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -80,12 +80,6 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         sessionTitleView.setText(fullSessionTitleStyled);
 
         boolean sessionRunning = sessionAtRow.isRunning();
-
-        if (sessionRunning) {
-            sessionTitleView.setPaintFlags(sessionTitleView.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-        } else {
-            sessionTitleView.setPaintFlags(sessionTitleView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-        }
         int defaultColor = shouldEnableDarkTheme ? Color.WHITE : Color.BLACK;
         int color = sessionRunning || sessionAtRow.getExitStatus() == 0 ? defaultColor : Color.RED;
         sessionTitleView.setTextColor(color);
@@ -102,7 +96,24 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
     @Override
     public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
         final TermuxSession selectedSession = getItem(position);
-        mActivity.getTermuxTerminalSessionClient().renameSession(selectedSession.getTerminalSession());
+        if (selectedSession == null) return false;
+
+        TerminalSession terminalSession = selectedSession.getTerminalSession();
+        if (terminalSession == null) return false;
+
+        new AlertDialog.Builder(mActivity)
+            .setTitle(R.string.title_session_actions)
+            .setItems(new CharSequence[]{
+                mActivity.getString(R.string.action_rename_session),
+                mActivity.getString(R.string.action_delete_session)
+            }, (dialog, which) -> {
+                if (which == 0) {
+                    mActivity.getTermuxTerminalSessionClient().renameSession(terminalSession);
+                } else if (which == 1) {
+                    mActivity.getTermuxTerminalSessionClient().removeSession(terminalSession);
+                }
+            })
+            .show();
         return true;
     }
 

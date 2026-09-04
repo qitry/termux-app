@@ -390,6 +390,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxService = ((TermuxService.LocalBinder) service).service;
 
         setTermuxSessionsListView();
+        mTermuxTerminalSessionActivityClient.pruneFinishedSessions();
 
         final Intent intent = getIntent();
         setIntent(null);

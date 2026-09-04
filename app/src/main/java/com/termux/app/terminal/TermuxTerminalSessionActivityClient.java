@@ -6,7 +6,6 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.media.AudioAttributes;
 import android.media.SoundPool;
@@ -70,6 +69,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // Get the session stored in shared preferences stored by {@link #onStop} if its valid,
         // otherwise get the last session currently running.
         if (mActivity.getTermuxService() != null) {
+            pruneFinishedSessions();
             setCurrentSession(getCurrentStoredSessionOrLast());
             termuxSessionListNotifyUpdated();
         }
@@ -147,17 +147,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
         int index = service.getIndexOfSession(finishedSession);
 
-        // For plugin commands that expect the result back, we should immediately close the session
-        // and send the result back instead of waiting fo the user to press enter.
-        // The plugin can handle/show errors itself.
-        boolean isPluginExecutionCommandWithPendingResult = false;
-        TermuxSession termuxSession = service.getTermuxSession(index);
-        if (termuxSession != null) {
-            isPluginExecutionCommandWithPendingResult = termuxSession.getExecutionCommand().isPluginExecutionCommandWithPendingResult();
-            if (isPluginExecutionCommandWithPendingResult)
-                Logger.logVerbose(LOG_TAG, "The \"" + finishedSession.mSessionName + "\" session will be force finished automatically since result in pending.");
-        }
-
         if (mActivity.isVisible() && finishedSession != mActivity.getCurrentSession()) {
             // Show toast for non-current sessions that exit.
             // Verify that session was not removed before we got told about it finishing:
@@ -165,19 +154,8 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 mActivity.showToast(toToastTitle(finishedSession) + " - exited", true);
         }
 
-        if (mActivity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK)) {
-            // On Android TV devices we need to use older behaviour because we may
-            // not be able to have multiple launcher icons.
-            if (service.getTermuxSessionsSize() > 1 || isPluginExecutionCommandWithPendingResult) {
-                removeFinishedSession(finishedSession);
-            }
-        } else {
-            // Once we have a separate launcher icon for the failsafe session, it
-            // should be safe to auto-close session on exit code '0' or '130'.
-            if (finishedSession.getExitStatus() == 0 || finishedSession.getExitStatus() == 130 || isPluginExecutionCommandWithPendingResult) {
-                removeFinishedSession(finishedSession);
-            }
-        }
+        // Remove finished sessions immediately so that they do not linger in the sessions list.
+        removeFinishedSession(finishedSession);
     }
 
     @Override
@@ -358,6 +336,41 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             TermuxSession termuxSession = service.getTermuxSessionForTerminalSession(sessionToRename);
             if (termuxSession != null)
                 termuxSession.getExecutionCommand().shellName = text;
+        }
+    }
+
+    /**
+     * Delete a session from the sessions list. Running sessions are killed first after user
+     * confirmation, and the session is removed once {@link #onSessionFinished} is called.
+     * Finished sessions are removed immediately.
+     */
+    public void removeSession(final TerminalSession sessionToRemove) {
+        if (sessionToRemove == null) return;
+
+        if (sessionToRemove.isRunning()) {
+            new AlertDialog.Builder(mActivity)
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .setMessage(R.string.title_confirm_kill_process)
+                .setPositiveButton(android.R.string.yes, (dialog, id) -> {
+                    dialog.dismiss();
+                    sessionToRemove.finishIfRunning();
+                })
+                .setNegativeButton(android.R.string.no, null)
+                .show();
+        } else {
+            removeFinishedSession(sessionToRemove);
+        }
+    }
+
+    /** Remove sessions that have already finished but were not removed, e.g. when the activity was not in the foreground. */
+    public void pruneFinishedSessions() {
+        TermuxService service = mActivity.getTermuxService();
+        if (service == null) return;
+
+        for (int i = service.getTermuxSessionsSize() - 1; i >= 0; i--) {
+            TermuxSession termuxSession = service.getTermuxSession(i);
+            if (termuxSession != null && !termuxSession.getTerminalSession().isRunning())
+                service.removeTermuxSession(termuxSession.getTerminalSession());
         }
     }
 

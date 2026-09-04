@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.graphics.BlendMode;
+import android.graphics.LinearGradient;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
 import android.net.Uri;
@@ -843,24 +845,49 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return (DrawerLayout) findViewById(R.id.drawer_layout);
     }
 
-    /** Apply gaussian blur to the terminal view when the sessions drawer is open on Android 12+. */
+    /** Apply gaussian blur to the terminal area covered by the sessions drawer on Android 12+. */
     private void setupDrawerBlur() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
 
         DrawerLayout drawerLayout = getDrawer();
-        TerminalView terminalView = mTerminalView;
-        RenderEffect blurEffect = RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP);
-
+        View leftDrawer = findViewById(R.id.left_drawer);
         DrawerLayout.SimpleDrawerListener listener = new DrawerLayout.SimpleDrawerListener() {
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
-                terminalView.setRenderEffect(slideOffset > 0f ? blurEffect : null);
+                updateDrawerBlur(leftDrawer, slideOffset);
             }
         };
         drawerLayout.addDrawerListener(listener);
 
-        if (drawerLayout.isDrawerOpen(Gravity.LEFT))
-            listener.onDrawerSlide(null, 1f);
+        if (drawerLayout.isDrawerOpen(leftDrawer))
+            updateDrawerBlur(leftDrawer, 1f);
+    }
+
+    private void updateDrawerBlur(View drawerView, float slideOffset) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mTerminalView == null) return;
+
+        if (drawerView == null || slideOffset <= 0f) {
+            mTerminalView.setRenderEffect(null);
+            return;
+        }
+
+        int drawerWidth = drawerView.getWidth() > 0 ? drawerView.getWidth() : drawerView.getMeasuredWidth();
+        float edge = drawerWidth * slideOffset;
+        if (edge <= 0f) {
+            mTerminalView.setRenderEffect(null);
+            return;
+        }
+
+        float fade = Math.min(24f, edge);
+        LinearGradient mask = new LinearGradient(0, 0, edge, 0,
+            new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
+            new float[]{0f, (edge - fade) / edge, 1f}, Shader.TileMode.CLAMP);
+
+        RenderEffect original = RenderEffect.createOffsetEffect(0f, 0f);
+        RenderEffect blurred = RenderEffect.createBlendModeEffect(
+            RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP),
+            RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
+        mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(original, blurred, BlendMode.SRC_OVER));
     }
 
 

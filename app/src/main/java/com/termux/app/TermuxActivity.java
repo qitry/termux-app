@@ -9,7 +9,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.graphics.RenderEffect;
+import android.graphics.Shader;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.ContextMenu;
@@ -242,6 +245,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         setTermuxTerminalViewAndClients();
+
+        setupDrawerBlur();
 
         setTerminalToolbarView(savedInstanceState);
 
@@ -836,6 +841,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public DrawerLayout getDrawer() {
         return (DrawerLayout) findViewById(R.id.drawer_layout);
+    }
+
+    /** Apply gaussian blur to the terminal view when the sessions drawer is open on Android 12+. */
+    private void setupDrawerBlur() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+
+        DrawerLayout drawerLayout = getDrawer();
+        TerminalView terminalView = mTerminalView;
+        RenderEffect blurEffect = RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP);
+
+        DrawerLayout.SimpleDrawerListener listener = new DrawerLayout.SimpleDrawerListener() {
+            @Override
+            public void onDrawerSlide(View drawerView, float slideOffset) {
+                terminalView.setRenderEffect(slideOffset > 0f ? blurEffect : null);
+            }
+        };
+        drawerLayout.addDrawerListener(listener);
+
+        if (drawerLayout.isDrawerOpen(Gravity.LEFT))
+            listener.onDrawerSlide(null, 1f);
     }
 
 

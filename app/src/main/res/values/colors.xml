@@ -1,3 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 半透明侧栏背景，配合模糊效果使用 -->
+    <color name="drawer_background_light">#C8FFFFFF</color>
+    <color name="drawer_background_dark">#C81B1D1F</color>
 </resources>

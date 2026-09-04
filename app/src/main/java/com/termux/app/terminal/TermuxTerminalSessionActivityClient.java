@@ -391,6 +391,9 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
                 workingDirectory = currentSession.getCwd();
             }
 
+            if (TextUtils.isEmpty(sessionName))
+                sessionName = mActivity.getString(R.string.default_session_name);
+
             TermuxSession newTermuxSession = service.createTermuxSession(null, null, null, workingDirectory, isFailSafe, sessionName);
             if (newTermuxSession == null) return;
 

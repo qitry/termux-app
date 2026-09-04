@@ -1,7 +1,6 @@
 package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.text.SpannableString;
@@ -16,6 +15,7 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 
 import com.termux.R;
@@ -101,19 +101,16 @@ public class TermuxSessionsListViewController extends ArrayAdapter<TermuxSession
         TerminalSession terminalSession = selectedSession.getTerminalSession();
         if (terminalSession == null) return false;
 
-        new AlertDialog.Builder(mActivity)
-            .setTitle(R.string.title_session_actions)
-            .setItems(new CharSequence[]{
-                mActivity.getString(R.string.action_rename_session),
-                mActivity.getString(R.string.action_delete_session)
-            }, (dialog, which) -> {
-                if (which == 0) {
-                    mActivity.getTermuxTerminalSessionClient().renameSession(terminalSession);
-                } else if (which == 1) {
-                    mActivity.getTermuxTerminalSessionClient().removeSession(terminalSession);
-                }
-            })
-            .show();
+        PopupMenu popupMenu = new PopupMenu(mActivity, view);
+        popupMenu.getMenu().add(R.string.action_rename_session).setOnMenuItemClickListener(item -> {
+            mActivity.getTermuxTerminalSessionClient().renameSession(terminalSession);
+            return true;
+        });
+        popupMenu.getMenu().add(R.string.action_delete_session).setOnMenuItemClickListener(item -> {
+            mActivity.getTermuxTerminalSessionClient().removeSession(terminalSession);
+            return true;
+        });
+        popupMenu.show();
         return true;
     }
 

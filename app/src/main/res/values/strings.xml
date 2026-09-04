@@ -48,9 +48,9 @@
     <string name="title_create_named_session">新建命名会话</string>
     <string name="action_create_named_session_confirm">创建</string>
 
-    <string name="title_session_actions">会话操作</string>
     <string name="action_rename_session">重命名</string>
     <string name="action_delete_session">删除会话</string>
+    <string name="default_session_name">[MUM]Termux OS</string>
 
     <string name="action_toggle_soft_keyboard">键盘</string>
 

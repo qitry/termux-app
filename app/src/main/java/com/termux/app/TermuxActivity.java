@@ -145,9 +145,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     TermuxSessionsListViewController mTermuxSessionListViewController;
 
     /**
-     * Gaussian blur effect applied to the terminal view while the sessions drawer is open on Android 12+.
+     * Gaussian blur effect for the terminal view while the sessions drawer is open on Android 12+.
+     * The expensive blur kernel is created once; the per-slide mask is rebuilt cheaply on each frame.
      */
     private RenderEffect mDrawerBlurEffect;
+
+    /**
+     * Unmodified terminal content, composited under the blurred region so the rest stays sharp.
+     */
+    private RenderEffect mDrawerOriginalEffect;
 
     /**
      * Tracks whether the drawer blur effect is currently applied to the terminal view.
@@ -866,49 +872,56 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // hides the blurred terminal, making the blur invisible on dark shell screens.
         drawerLayout.setScrimColor(Color.TRANSPARENT);
 
+        mDrawerBlurEffect = RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP);
+        mDrawerOriginalEffect = RenderEffect.createOffsetEffect(0f, 0f);
+
         View leftDrawer = findViewById(R.id.left_drawer);
         drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
-                setDrawerBlur(slideOffset > 0f);
-            }
-
-            @Override
-            public void onDrawerOpened(View drawerView) {
-                setDrawerBlur(true);
+                updateDrawerBlur(leftDrawer, slideOffset);
             }
 
             @Override
             public void onDrawerClosed(View drawerView) {
-                setDrawerBlur(false);
+                updateDrawerBlur(leftDrawer, 0f);
             }
         });
 
         leftDrawer.post(() -> {
-            int width = leftDrawer.getWidth();
-            if (width <= 0) return;
-
-            LinearGradient mask = new LinearGradient(0, 0, width, 0,
-                new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
-                new float[]{0f, 0.999f, 1f}, Shader.TileMode.CLAMP);
-
-            RenderEffect original = RenderEffect.createOffsetEffect(0f, 0f);
-            RenderEffect blurred = RenderEffect.createBlendModeEffect(
-                RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP),
-                RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
-            mDrawerBlurEffect = RenderEffect.createBlendModeEffect(original, blurred, BlendMode.SRC_OVER);
-
             if (drawerLayout.isDrawerOpen(leftDrawer))
-                setDrawerBlur(true);
+                updateDrawerBlur(leftDrawer, 1f);
         });
     }
 
-    private void setDrawerBlur(boolean enabled) {
+    private void updateDrawerBlur(View drawerView, float slideOffset) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mDrawerBlurEffect == null || mTerminalView == null) return;
-        if (mDrawerBlurApplied == enabled) return;
 
-        mDrawerBlurApplied = enabled;
-        mTerminalView.setRenderEffect(enabled ? mDrawerBlurEffect : null);
+        if (drawerView == null || slideOffset <= 0f) {
+            if (mDrawerBlurApplied) {
+                mDrawerBlurApplied = false;
+                mTerminalView.setRenderEffect(null);
+            }
+            return;
+        }
+
+        int width = drawerView.getWidth();
+        if (width <= 0) return;
+
+        // Blur exactly the strip the drawer currently covers, with a small soft edge, so the
+        // blurred region grows in sync with the drawer instead of appearing before it slides out.
+        float edge = width * slideOffset;
+        float fade = Math.min(16f, edge / 2f);
+
+        LinearGradient mask = new LinearGradient(0, 0, edge, 0,
+            new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
+            new float[]{0f, (edge - fade) / edge, 1f}, Shader.TileMode.CLAMP);
+
+        RenderEffect blurred = RenderEffect.createBlendModeEffect(
+            mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
+        mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(
+            mDrawerOriginalEffect, blurred, BlendMode.SRC_OVER));
+        mDrawerBlurApplied = true;
     }
 
 

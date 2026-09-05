@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.graphics.BlendMode;
+import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
@@ -860,6 +861,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
 
         DrawerLayout drawerLayout = getDrawer();
+
+        // Remove the default dim scrim: it stacks with the translucent drawer background and
+        // hides the blurred terminal, making the blur invisible on dark shell screens.
+        drawerLayout.setScrimColor(Color.TRANSPARENT);
+
         View leftDrawer = findViewById(R.id.left_drawer);
         drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
             @Override

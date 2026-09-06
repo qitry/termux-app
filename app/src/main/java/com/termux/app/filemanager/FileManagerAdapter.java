@@ -19,6 +19,8 @@ import java.util.Locale;
 
 public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.FileViewHolder> {
 
+    private static final int PLACEHOLDER_COLOR = 0xFF888888;
+
     public interface Callbacks {
         void onFileClicked(FileEntry entry);
 
@@ -89,6 +91,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
     }
 
     public void toggleSelection(FileEntry entry) {
+        if (entry.isSpecial()) return;
         if (mSelected.contains(entry)) mSelected.remove(entry);
         else mSelected.add(entry);
         if (mSelected.isEmpty()) {
@@ -101,6 +104,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
     /** Select every item between the last-selected anchor and {@code entry}, inclusive. */
     public void selectRange(FileEntry entry) {
+        if (entry.isSpecial()) return;
         if (mSelected.isEmpty()) {
             startSelection(entry);
             return;
@@ -112,7 +116,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         int to = Math.max(anchor, target);
         for (int i = from; i <= to; i++) {
             FileEntry item = mItems.get(i);
-            if (!mSelected.contains(item)) mSelected.add(item);
+            if (!item.isSpecial() && !mSelected.contains(item)) mSelected.add(item);
         }
         notifyDataSetChanged();
         mCallbacks.onSelectionChanged(mSelected.size());
@@ -130,6 +134,28 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         FileEntry entry = mItems.get(position);
         holder.entry = entry;
 
+        if (entry.isSpecial()) {
+            holder.name.setText(entry.name);
+            holder.meta.setText("");
+            if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) {
+                holder.icon.setVisibility(View.INVISIBLE);
+                holder.name.setTextColor(PLACEHOLDER_COLOR);
+                holder.itemView.setOnClickListener(null);
+                holder.itemView.setOnLongClickListener(v -> true);
+            } else {
+                holder.icon.setVisibility(View.VISIBLE);
+                holder.icon.setImageResource(entry.special == FileEntry.SPECIAL_PARENT
+                    ? R.drawable.ic_fm_up : R.drawable.ic_fm_move);
+                holder.name.setTextColor(holder.originalTextColor);
+                holder.itemView.setOnClickListener(v -> mCallbacks.onFileClicked(entry));
+                holder.itemView.setOnLongClickListener(v -> true);
+            }
+            holder.itemView.setBackgroundColor(0x00000000);
+            return;
+        }
+
+        holder.icon.setVisibility(View.VISIBLE);
+        holder.name.setTextColor(holder.originalTextColor);
         holder.icon.setImageResource(FileIcons.getIconRes(entry));
         if (!entry.isArchiveEntry() && FileIcons.isImage(entry) && entry.hostFile != null)
             ThumbnailLoader.loadInto(holder.icon, entry.hostFile);
@@ -162,10 +188,11 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         return mItems.get(position);
     }
 
-    public static class FileViewHolder extends RecyclerView.ViewHolder {
+    public     static class FileViewHolder extends RecyclerView.ViewHolder {
         final ImageView icon;
         final TextView name;
         final TextView meta;
+        final int originalTextColor;
         FileEntry entry;
 
         FileViewHolder(@NonNull View itemView) {
@@ -173,6 +200,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
             icon = itemView.findViewById(R.id.file_icon);
             name = itemView.findViewById(R.id.file_name);
             meta = itemView.findViewById(R.id.file_meta);
+            originalTextColor = name.getCurrentTextColor();
         }
     }
 }

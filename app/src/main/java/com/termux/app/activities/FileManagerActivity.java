@@ -218,8 +218,14 @@ public class FileManagerActivity extends AppCompatActivity {
 
             @Override
             public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                FileEntry entry = pane.adapter.getEntryAt(viewHolder.getBindingAdapterPosition());
-                if (entry != null) handleSwipeSelected(pane, entry);
+                int position = viewHolder.getBindingAdapterPosition();
+                FileEntry entry = pane.adapter.getEntryAt(position);
+                if (entry == null) return;
+                if (entry.isSpecial()) {
+                    pane.adapter.notifyItemChanged(position);
+                    return;
+                }
+                handleSwipeSelected(pane, entry);
             }
 
             @Override
@@ -238,8 +244,15 @@ public class FileManagerActivity extends AppCompatActivity {
             showBackgroundMenu(v);
             return true;
         });
-        // RecyclerView consumes touches, so empty-area taps never reach the container listener;
-        // focus the pane directly when tapping blank space inside the list.
+        // Focus on any touch inside the pane (CSS-hover-like): ACTION_DOWN claims focus without
+        // consuming the event, so scrolling and item gestures keep working.
+        pane.listView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull android.view.MotionEvent e) {
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) setActivePane(pane);
+                return false;
+            }
+        });
         pane.listView.setOnClickListener(v -> setActivePane(pane));
         pane.container.setOnClickListener(v -> setActivePane(pane));
     }
@@ -388,6 +401,7 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private void handleFileClicked(FilePane pane, FileEntry entry) {
         setActivePane(pane);
+        if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) return;
         if (entry.isArchiveEntry()) {
             if (entry.isDirectory) {
                 loadArchivePane(pane, entry.archiveHostFile, entry.archiveEntryPath);
@@ -906,6 +920,8 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private void startSearch(FilePane pane, String query) {
         pane.searchQuery = query;
+        pane.adapter.setItems(Collections.singletonList(
+            FileEntry.special(getString(R.string.fm_searching_now), FileEntry.SPECIAL_PLACEHOLDER)));
         if (pane.archiveContext != null) {
             File archive = pane.archiveContext;
             runBackground(() -> {
@@ -922,7 +938,7 @@ public class FileManagerActivity extends AppCompatActivity {
                     return;
                 }
                 mHandler.post(() -> {
-                    pane.adapter.setItems(results);
+                    pane.adapter.setItems(withNoResultsPlaceholder(results));
                     if (pane == mActivePane) updatePathText();
                 });
             });
@@ -932,11 +948,18 @@ public class FileManagerActivity extends AppCompatActivity {
                 List<FileEntry> results = new ArrayList<>();
                 searchWalk(root, root, query.toLowerCase(Locale.US), results, 0);
                 mHandler.post(() -> {
-                    pane.adapter.setItems(results);
+                    pane.adapter.setItems(withNoResultsPlaceholder(results));
                     if (pane == mActivePane) updatePathText();
                 });
             });
         }
+    }
+
+    private List<FileEntry> withNoResultsPlaceholder(List<FileEntry> results) {
+        if (!results.isEmpty()) return results;
+        List<FileEntry> withPlaceholder = new ArrayList<>();
+        withPlaceholder.add(FileEntry.special(getString(R.string.fm_no_results), FileEntry.SPECIAL_PLACEHOLDER));
+        return withPlaceholder;
     }
 
     private void searchWalk(File dir, File root, String lowerQuery, List<FileEntry> out, int depth) {

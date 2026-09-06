@@ -123,6 +123,8 @@
     <string name="fm_open_with_hint">长按内置方式可设为该后缀的默认打开方式</string>
     <string name="fm_default_set">已将 %1$s 默认设为「%2$s」</string>
     <string name="fm_mode_unsupported_in_archive">压缩包内仅支持系统打开</string>
+    <string name="fm_searching_now">搜索中…</string>
+    <string name="fm_no_results">无匹配项</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

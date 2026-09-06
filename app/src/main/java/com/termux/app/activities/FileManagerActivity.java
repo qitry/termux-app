@@ -1,0 +1,445 @@
+package com.termux.app.activities;
+
+import android.Manifest;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.view.ActionMode;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.core.content.FileProvider;
+import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.termux.R;
+import com.termux.app.filemanager.FileManagerAdapter;
+import com.termux.app.filemanager.FileManagerUtils;
+import com.termux.shared.android.PermissionUtils;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.interact.TextInputDialogUtils;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class FileManagerActivity extends AppCompatActivity {
+
+    private static final int REQUEST_STORAGE_PERMISSIONS = 101;
+
+    private static final int MENU_ITEM_NEW_FOLDER = 1;
+    private static final int MENU_ITEM_PASTE = 2;
+
+    private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+
+    private final FilePane mTermuxPane = new FilePane();
+    private final FilePane mAndroidPane = new FilePane();
+    private FilePane mActivePane;
+
+    private TextView mPathText;
+
+    private final List<File> mClipboard = new ArrayList<>();
+    private boolean mClipboardIsCut;
+
+    private ActionMode mActionMode;
+
+    private class FilePane {
+        View container;
+        View indicator;
+        RecyclerView listView;
+        FileManagerAdapter adapter;
+        File rootDirectory;
+        File currentDirectory;
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_file_manager);
+
+        mPathText = findViewById(R.id.file_manager_path);
+        findViewById(R.id.file_manager_up).setOnClickListener(v -> navigateUp());
+        findViewById(R.id.file_manager_refresh).setOnClickListener(v -> loadPane(mActivePane, mActivePane.currentDirectory));
+
+        setupPane(mTermuxPane, R.id.termux_pane_container, R.id.termux_pane_indicator, R.id.termux_pane_list,
+            new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+        setupPane(mAndroidPane, R.id.android_pane_container, R.id.android_pane_indicator, R.id.android_pane_list,
+            Environment.getExternalStorageDirectory());
+
+        setActivePane(mTermuxPane);
+
+        loadPane(mTermuxPane, mTermuxPane.rootDirectory);
+        loadPane(mAndroidPane, mAndroidPane.rootDirectory);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            && !PermissionUtils.checkPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            PermissionUtils.requestPermissions(this,
+                new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                REQUEST_STORAGE_PERMISSIONS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_STORAGE_PERMISSIONS)
+            loadPane(mAndroidPane, mAndroidPane.currentDirectory);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mExecutor.shutdownNow();
+    }
+
+    private void setupPane(FilePane pane, int containerId, int indicatorId, int listId, File root) {
+        pane.rootDirectory = root;
+        pane.currentDirectory = root;
+        pane.container = findViewById(containerId);
+        pane.indicator = pane.container.findViewById(indicatorId);
+        pane.listView = pane.container.findViewById(listId);
+
+        pane.listView.setLayoutManager(new LinearLayoutManager(this));
+        pane.listView.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
+        pane.adapter = new FileManagerAdapter(new FileManagerAdapter.Callbacks() {
+            @Override
+            public void onFileClicked(File file) {
+                handleFileClicked(pane, file);
+            }
+
+            @Override
+            public void onFileLongClicked(File file) {
+                handleFileLongClicked(pane, file);
+            }
+
+            @Override
+            public void onSelectionChanged(int count) {
+                if (mActionMode != null) mActionMode.invalidate();
+            }
+        });
+        pane.listView.setAdapter(pane.adapter);
+
+        pane.listView.setOnLongClickListener(v -> {
+            if (mActionMode != null) return false;
+            setActivePane(pane);
+            showBackgroundMenu(v);
+            return true;
+        });
+        pane.container.setOnClickListener(v -> setActivePane(pane));
+    }
+
+    private void setActivePane(FilePane pane) {
+        mActivePane = pane;
+        mTermuxPane.indicator.setVisibility(pane == mTermuxPane ? View.VISIBLE : View.INVISIBLE);
+        mAndroidPane.indicator.setVisibility(pane == mAndroidPane ? View.VISIBLE : View.INVISIBLE);
+        updatePathText();
+    }
+
+    private void updatePathText() {
+        if (mActivePane != null)
+            mPathText.setText(mActivePane.currentDirectory.getAbsolutePath());
+    }
+
+    private void loadPane(FilePane pane, File directory) {
+        mExecutor.execute(() -> {
+            File[] files = directory.listFiles();
+            List<File> entries = files == null ? new ArrayList<>() : new ArrayList<>(Arrays.asList(files));
+            Collections.sort(entries, (a, b) -> {
+                boolean aDir = a.isDirectory();
+                boolean bDir = b.isDirectory();
+                if (aDir != bDir) return aDir ? -1 : 1;
+                return String.CASE_INSENSITIVE_ORDER.compare(a.getName(), b.getName());
+            });
+            mHandler.post(() -> {
+                pane.currentDirectory = directory;
+                pane.adapter.setItems(entries);
+                if (pane == mActivePane) updatePathText();
+            });
+        });
+    }
+
+    private void navigateUp() {
+        File current = mActivePane.currentDirectory;
+        File root = mActivePane.rootDirectory;
+        if (current.getAbsolutePath().equals(root.getAbsolutePath())) return;
+        File parent = current.getParentFile();
+        if (parent != null) loadPane(mActivePane, parent);
+    }
+
+    private void handleFileClicked(FilePane pane, File file) {
+        setActivePane(pane);
+        if (file.isDirectory()) loadPane(pane, file);
+        else openFile(file);
+    }
+
+    private void handleFileLongClicked(FilePane pane, File file) {
+        setActivePane(pane);
+        if (mActionMode == null)
+            mActionMode = startSupportActionMode(new SelectionActionModeCallback());
+        mTermuxPane.adapter.clearSelection();
+        mAndroidPane.adapter.clearSelection();
+        pane.adapter.startSelection(file);
+    }
+
+    private int getSelectedCount() {
+        return mTermuxPane.adapter.getSelectedCount() + mAndroidPane.adapter.getSelectedCount();
+    }
+
+    private List<File> getSelectedFiles() {
+        List<File> selected = new ArrayList<>(mTermuxPane.adapter.getSelected());
+        selected.addAll(mAndroidPane.adapter.getSelected());
+        return selected;
+    }
+
+    private class SelectionActionModeCallback implements ActionMode.Callback {
+        @Override
+        public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+            mode.getMenuInflater().inflate(R.menu.fm_selection, menu);
+            return true;
+        }
+
+        @Override
+        public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+            int count = getSelectedCount();
+            menu.findItem(R.id.fm_menu_rename).setVisible(count == 1);
+            mode.setTitle(getString(R.string.fm_selected_count, count));
+            return true;
+        }
+
+        @Override
+        public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
+            int id = item.getItemId();
+            if (id == R.id.fm_menu_copy) {
+                setClipboard(false);
+                mode.finish();
+            } else if (id == R.id.fm_menu_cut) {
+                setClipboard(true);
+                mode.finish();
+            } else if (id == R.id.fm_menu_rename) {
+                renameSelected();
+                mode.finish();
+            } else if (id == R.id.fm_menu_select_all) {
+                mActivePane.adapter.selectAll();
+            } else if (id == R.id.fm_menu_delete) {
+                confirmDeleteSelected();
+                mode.finish();
+            } else {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public void onDestroyActionMode(ActionMode mode) {
+            mActionMode = null;
+            mTermuxPane.adapter.clearSelection();
+            mAndroidPane.adapter.clearSelection();
+        }
+    }
+
+    private void setClipboard(boolean cut) {
+        mClipboard.clear();
+        mClipboard.addAll(getSelectedFiles());
+        mClipboardIsCut = cut;
+        Toast.makeText(this, cut ? R.string.fm_cut_count : R.string.fm_copied_count,
+            Toast.LENGTH_SHORT).show();
+    }
+
+    private void renameSelected() {
+        List<File> selected = getSelectedFiles();
+        if (selected.size() != 1) return;
+        File file = selected.get(0);
+
+        TextInputDialogUtils.textInput(this, R.string.fm_rename, file.getName(),
+            R.string.fm_confirm, text -> {
+                String newName = text.trim();
+                if (newName.isEmpty() || newName.contains("/")) {
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_invalid_name, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                File destination = new File(file.getParentFile(), newName);
+                if (destination.exists()) {
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_conflict_title, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!file.renameTo(destination))
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_rename_failed, Toast.LENGTH_SHORT).show();
+                refreshBothPanes();
+            }, -1, null, -1, null, null);
+    }
+
+    private void confirmDeleteSelected() {
+        List<File> selected = getSelectedFiles();
+        if (selected.isEmpty()) return;
+
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.fm_delete_confirm_title)
+            .setMessage(getString(R.string.fm_delete_confirm_message, selected.size()))
+            .setPositiveButton(R.string.fm_delete, (dialog, which) -> {
+                List<File> targets = new ArrayList<>(selected);
+                mExecutor.execute(() -> {
+                    boolean failed = false;
+                    for (File file : targets) {
+                        if (!FileManagerUtils.deleteRecursive(file)) failed = true;
+                    }
+                    boolean finalFailed = failed;
+                    mHandler.post(() -> {
+                        refreshBothPanes();
+                        if (finalFailed)
+                            Toast.makeText(FileManagerActivity.this, R.string.fm_delete_failed, Toast.LENGTH_SHORT).show();
+                    });
+                });
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showBackgroundMenu(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        popup.getMenu().add(0, MENU_ITEM_NEW_FOLDER, 0, R.string.fm_new_folder);
+        popup.getMenu().add(0, MENU_ITEM_PASTE, 1, R.string.fm_paste);
+        popup.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == MENU_ITEM_NEW_FOLDER) promptNewFolder();
+            else if (item.getItemId() == MENU_ITEM_PASTE) pasteToActivePane();
+            return true;
+        });
+        popup.show();
+    }
+
+    private void promptNewFolder() {
+        TextInputDialogUtils.textInput(this, R.string.fm_new_folder, "",
+            R.string.fm_confirm, text -> {
+                String name = text.trim();
+                if (name.isEmpty() || name.contains("/")) {
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_invalid_name, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                File directory = new File(mActivePane.currentDirectory, name);
+                if (!directory.mkdirs())
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_new_folder_failed, Toast.LENGTH_SHORT).show();
+                loadPane(mActivePane, mActivePane.currentDirectory);
+            }, -1, null, -1, null, null);
+    }
+
+    private void pasteToActivePane() {
+        if (mClipboard.isEmpty()) {
+            Toast.makeText(this, R.string.fm_nothing_to_paste, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        File targetDir = mActivePane.currentDirectory;
+        boolean hasConflict = false;
+        for (File source : mClipboard) {
+            if (new File(targetDir, source.getName()).exists()) {
+                hasConflict = true;
+                break;
+            }
+        }
+
+        if (hasConflict) {
+            new AlertDialog.Builder(this)
+                .setTitle(R.string.fm_conflict_title)
+                .setMessage(R.string.fm_conflict_message)
+                .setPositiveButton(R.string.fm_overwrite, (dialog, which) -> doPaste(targetDir, true))
+                .setNeutralButton(R.string.fm_skip, (dialog, which) -> doPaste(targetDir, false))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } else {
+            doPaste(targetDir, true);
+        }
+    }
+
+    private void doPaste(File targetDir, boolean overwrite) {
+        List<File> sources = new ArrayList<>(mClipboard);
+        boolean cut = mClipboardIsCut;
+        mClipboard.clear();
+        mClipboardIsCut = false;
+
+        mExecutor.execute(() -> {
+            boolean failed = false;
+            for (File source : sources) {
+                File destination = new File(targetDir, source.getName());
+                if (destination.getAbsolutePath().equals(source.getAbsolutePath())) continue;
+                if (destination.exists()) {
+                    if (!overwrite) continue;
+                    if (!FileManagerUtils.deleteRecursive(destination)) {
+                        failed = true;
+                        continue;
+                    }
+                }
+                boolean ok = cut ? FileManagerUtils.move(source, destination)
+                    : FileManagerUtils.copyRecursive(source, destination);
+                if (!ok) failed = true;
+            }
+            boolean finalFailed = failed;
+            mHandler.post(() -> {
+                refreshBothPanes();
+                if (finalFailed)
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_paste_failed, Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
+    private void refreshBothPanes() {
+        loadPane(mTermuxPane, mTermuxPane.currentDirectory);
+        loadPane(mAndroidPane, mAndroidPane.currentDirectory);
+    }
+
+    private void openFile(File file) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".filemanager", file);
+            intent.setDataAndType(uri, getMimeType(file));
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.fm_no_app_to_open, Toast.LENGTH_SHORT).show();
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(this, R.string.fm_open_failed, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String getMimeType(File file) {
+        String extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(Uri.fromFile(file).toString());
+        if (extension != null && !extension.isEmpty()) {
+            String mimeType = android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(extension.toLowerCase(Locale.US));
+            if (mimeType != null) return mimeType;
+        }
+        return "*/*";
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (mActionMode != null) {
+            mActionMode.finish();
+            return;
+        }
+        File current = mActivePane.currentDirectory;
+        File root = mActivePane.rootDirectory;
+        if (!current.getAbsolutePath().equals(root.getAbsolutePath())) {
+            navigateUp();
+            return;
+        }
+        super.onBackPressed();
+    }
+}

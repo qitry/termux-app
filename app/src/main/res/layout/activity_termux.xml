@@ -60,6 +60,15 @@
                         android:contentDescription="@string/action_open_settings"
                         app:tint="?attr/termuxActivityDrawerImageTint" />
 
+                    <ImageButton
+                        android:id="@+id/file_manager_button"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_file_manager"
+                        android:background="@null"
+                        android:contentDescription="@string/action_open_file_manager"
+                        app:tint="?attr/termuxActivityDrawerImageTint" />
+
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"

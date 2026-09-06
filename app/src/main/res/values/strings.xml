@@ -51,6 +51,37 @@
     <string name="action_delete_session">删除会话</string>
     <string name="default_session_name">Termux OS</string>
 
+    <!-- 文件管理器 -->
+    <string name="title_file_manager">文件管理</string>
+    <string name="action_open_file_manager">文件管理</string>
+    <string name="fm_up">上级目录</string>
+    <string name="fm_refresh">刷新</string>
+    <string name="fm_copy">复制</string>
+    <string name="fm_cut">剪切</string>
+    <string name="fm_rename">重命名</string>
+    <string name="fm_delete">删除</string>
+    <string name="fm_select_all">全选</string>
+    <string name="fm_new_folder">新建文件夹</string>
+    <string name="fm_paste">粘贴</string>
+    <string name="fm_confirm">确定</string>
+    <string name="fm_selected_count">已选择 %1$d 项</string>
+    <string name="fm_copied_count">已复制到剪贴板</string>
+    <string name="fm_cut_count">已剪切到剪贴板</string>
+    <string name="fm_nothing_to_paste">剪贴板为空</string>
+    <string name="fm_invalid_name">名称无效</string>
+    <string name="fm_rename_failed">重命名失败</string>
+    <string name="fm_new_folder_failed">创建文件夹失败</string>
+    <string name="fm_delete_confirm_title">确认删除</string>
+    <string name="fm_delete_confirm_message">确定删除 %1$d 个项目？此操作不可撤销。</string>
+    <string name="fm_delete_failed">部分项目删除失败</string>
+    <string name="fm_paste_failed">部分项目粘贴失败</string>
+    <string name="fm_conflict_title">文件已存在</string>
+    <string name="fm_conflict_message">目标位置存在同名项目，如何处理？</string>
+    <string name="fm_overwrite">覆盖</string>
+    <string name="fm_skip">跳过</string>
+    <string name="fm_no_app_to_open">没有应用可以打开此文件</string>
+    <string name="fm_open_failed">无法打开文件</string>
+
     <string name="action_toggle_soft_keyboard">键盘</string>
 
     <string name="msg_enabling_terminal_toolbar">正在启用终端工具栏</string>

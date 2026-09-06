@@ -906,6 +906,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mDrawerBlurApplied) {
                 mDrawerBlurApplied = false;
                 mTerminalView.setRenderEffect(null);
+                mTerminalView.invalidate();
             }
             return;
         }
@@ -928,6 +929,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
         mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(
             mDrawerOriginalEffect, blurred, BlendMode.SRC_OVER));
+        // setRenderEffect alone does not force the RenderNode to re-record its display list, so
+        // on a static terminal (cursor blinker disabled by default) the old sharp frame keeps being
+        // composited and the blur never shows. Invalidate forces the effect to take hold.
+        mTerminalView.invalidate();
         mDrawerBlurApplied = true;
     }
 

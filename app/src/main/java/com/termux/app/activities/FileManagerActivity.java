@@ -371,7 +371,11 @@ public class FileManagerActivity extends AppCompatActivity {
             actions.add(() -> openFile(entry.hostFile));
         } else if (single && FileIcons.isImage(entry)) {
             labels.add(getString(R.string.fm_view_image));
-            actions.add(() -> openFile(entry.hostFile));
+            actions.add(() -> {
+                Intent intent = new Intent(this, ImageViewerActivity.class);
+                intent.putExtra(ImageViewerActivity.EXTRA_PATH, entry.hostFile.getAbsolutePath());
+                startActivity(intent);
+            });
             labels.add(getString(R.string.fm_open_with));
             actions.add(() -> openFile(entry.hostFile));
         } else if (single && FileIcons.isEditable(entry) && entry.hostFile != null && entry.size <= MAX_EDITABLE_SIZE) {

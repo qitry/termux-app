@@ -900,9 +900,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void updateDrawerBlur(View drawerView, float slideOffset) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mDrawerBlurEffect == null || mTerminalView == null) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mDrawerBlurEffect == null || mTerminalView == null) {
+            android.util.Log.d("DrawerBlur", "skip: sdk=" + Build.VERSION.SDK_INT + " effect=" + (mDrawerBlurEffect != null) + " tv=" + (mTerminalView != null));
+            return;
+        }
 
         if (drawerView == null || slideOffset <= 0f) {
+            android.util.Log.d("DrawerBlur", "clear branch: drawerView=" + (drawerView != null) + " offset=" + slideOffset + " applied=" + mDrawerBlurApplied);
             if (mDrawerBlurApplied) {
                 mDrawerBlurApplied = false;
                 mTerminalView.setRenderEffect(null);
@@ -912,7 +916,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         int width = drawerView.getWidth();
-        if (width <= 0) return;
+        if (width <= 0) {
+            android.util.Log.d("DrawerBlur", "width<=0, offset=" + slideOffset);
+            return;
+        }
 
         // Blur exactly the strip the drawer currently covers. The soft edge sits just past the
         // drawer boundary so the whole drawer area is fully blurred, while the transition to the
@@ -934,6 +941,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // composited and the blur never shows. Invalidate forces the effect to take hold.
         mTerminalView.invalidate();
         mDrawerBlurApplied = true;
+        android.util.Log.d("DrawerBlur", "applied: offset=" + slideOffset + " edge=" + edge + " width=" + width);
     }
 
 

@@ -9,13 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.graphics.BlendMode;
-import android.graphics.Color;
-import android.graphics.LinearGradient;
-import android.graphics.RenderEffect;
-import android.graphics.Shader;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.ContextMenu;
@@ -146,22 +140,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     TermuxSessionsListViewController mTermuxSessionListViewController;
 
     /**
-     * Gaussian blur effect for the terminal view while the sessions drawer is open on Android 12+.
-     * The expensive blur kernel is created once; the per-slide mask is rebuilt cheaply on each frame.
-     */
-    private RenderEffect mDrawerBlurEffect;
-
-    /**
-     * Unmodified terminal content, composited under the blurred region so the rest stays sharp.
-     */
-    private RenderEffect mDrawerOriginalEffect;
-
-    /**
-     * Tracks whether the drawer blur effect is currently applied to the terminal view.
-     */
-    private boolean mDrawerBlurApplied;
-
-    /**
      * The {@link TermuxActivity} broadcast receiver for various things like terminal style configuration changes.
      */
     private final BroadcastReceiver mTermuxActivityBroadcastReceiver = new TermuxActivityBroadcastReceiver();
@@ -265,8 +243,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         setTermuxTerminalViewAndClients();
-
-        setupDrawerBlur();
 
         setTerminalToolbarView(savedInstanceState);
 
@@ -871,81 +847,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public DrawerLayout getDrawer() {
         return (DrawerLayout) findViewById(R.id.drawer_layout);
     }
-
-    /** Apply gaussian blur to the terminal area covered by the sessions drawer on Android 12+. */
-    private void setupDrawerBlur() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
-
-        DrawerLayout drawerLayout = getDrawer();
-
-        // Remove the default dim scrim: it stacks with the translucent drawer background and
-        // hides the blurred terminal, making the blur invisible on dark shell screens.
-        drawerLayout.setScrimColor(Color.TRANSPARENT);
-
-        mDrawerBlurEffect = RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP);
-        mDrawerOriginalEffect = RenderEffect.createOffsetEffect(0f, 0f);
-
-        View leftDrawer = findViewById(R.id.left_drawer);
-        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
-            @Override
-            public void onDrawerSlide(View drawerView, float slideOffset) {
-                updateDrawerBlur(leftDrawer, slideOffset);
-            }
-
-            @Override
-            public void onDrawerOpened(View drawerView) {
-                updateDrawerBlur(leftDrawer, 1f);
-            }
-
-            @Override
-            public void onDrawerClosed(View drawerView) {
-                updateDrawerBlur(leftDrawer, 0f);
-            }
-        });
-
-        leftDrawer.post(() -> {
-            if (drawerLayout.isDrawerOpen(leftDrawer))
-                updateDrawerBlur(leftDrawer, 1f);
-        });
-    }
-
-    private void updateDrawerBlur(View drawerView, float slideOffset) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mDrawerBlurEffect == null || mTerminalView == null) return;
-
-        if (drawerView == null || slideOffset <= 0f) {
-            if (mDrawerBlurApplied) {
-                mDrawerBlurApplied = false;
-                mTerminalView.setRenderEffect(null);
-                mTerminalView.invalidate();
-            }
-            return;
-        }
-
-        int width = drawerView.getWidth();
-        if (width <= 0) return;
-
-        // Blur exactly the strip the drawer currently covers. The soft edge sits just past the
-        // drawer boundary so the whole drawer area is fully blurred, while the transition to the
-        // sharp terminal happens outside, hidden by the drawer's edge shadow.
-        float edge = width * slideOffset;
-        float fade = Math.min(16f, edge);
-        float total = edge + fade;
-
-        LinearGradient mask = new LinearGradient(0, 0, total, 0,
-            new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
-            new float[]{0f, edge / total, 1f}, Shader.TileMode.CLAMP);
-
-        RenderEffect blurred = RenderEffect.createBlendModeEffect(
-            mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
-        mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(
-            mDrawerOriginalEffect, blurred, BlendMode.SRC_OVER));
-        // setRenderEffect alone does not force the RenderNode to re-record its display list, so
-        // on a static terminal (cursor blinker disabled by default) the old sharp frame keeps being
-        // composited and the blur never shows. Invalidate forces the effect to take hold.
-        mTerminalView.invalidate();
-        mDrawerBlurApplied = true;
-    }
-
 
     public ViewPager getTerminalToolbarViewPager() {
         return (ViewPager) findViewById(R.id.terminal_toolbar_view_pager);

@@ -88,6 +88,9 @@
     <string name="fm_copy_failed">部分项目复制失败</string>
     <string name="fm_target_opposite">对面栏：%1$s</string>
     <string name="fm_target_current">本栏：%1$s</string>
+    <string name="fm_save">保存</string>
+    <string name="fm_saved">已保存</string>
+    <string name="fm_save_failed">保存失败</string>
 
     <string name="action_toggle_soft_keyboard">键盘</string>
 

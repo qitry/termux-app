@@ -108,6 +108,12 @@
             android:label="@string/title_file_manager"
             android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
 
+        <activity
+            android:name=".app.activities.EditorActivity"
+            android:exported="false"
+            android:label="@string/fm_edit"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${TERMUX_PACKAGE_NAME}.filemanager"

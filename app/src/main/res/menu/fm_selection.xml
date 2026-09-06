@@ -2,35 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
-        android:id="@+id/fm_menu_copy"
-        android:icon="@drawable/ic_fm_copy"
-        android:title="@string/fm_copy"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/fm_menu_cut"
-        android:icon="@drawable/ic_fm_cut"
-        android:title="@string/fm_cut"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/fm_menu_compress"
-        android:icon="@drawable/ic_fm_archive"
-        android:title="@string/fm_compress"
-        app:showAsAction="ifRoom" />
-    <item
-        android:id="@+id/fm_menu_extract"
-        android:title="@string/fm_extract"
-        app:showAsAction="never" />
-    <item
-        android:id="@+id/fm_menu_rename"
-        android:title="@string/fm_rename"
-        app:showAsAction="never" />
-    <item
         android:id="@+id/fm_menu_select_all"
         android:title="@string/fm_select_all"
         app:showAsAction="never" />
-    <item
-        android:id="@+id/fm_menu_delete"
-        android:icon="@drawable/ic_fm_delete"
-        android:title="@string/fm_delete"
-        app:showAsAction="ifRoom" />
 </menu>

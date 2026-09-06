@@ -57,24 +57,18 @@
     <string name="fm_up">上级目录</string>
     <string name="fm_refresh">刷新</string>
     <string name="fm_copy">复制</string>
-    <string name="fm_cut">剪切</string>
     <string name="fm_rename">重命名</string>
     <string name="fm_delete">删除</string>
     <string name="fm_select_all">全选</string>
     <string name="fm_new_folder">新建文件夹</string>
-    <string name="fm_paste">粘贴</string>
     <string name="fm_confirm">确定</string>
     <string name="fm_selected_count">已选择 %1$d 项</string>
-    <string name="fm_copied_count">已复制到剪贴板</string>
-    <string name="fm_cut_count">已剪切到剪贴板</string>
-    <string name="fm_nothing_to_paste">剪贴板为空</string>
     <string name="fm_invalid_name">名称无效</string>
     <string name="fm_rename_failed">重命名失败</string>
     <string name="fm_new_folder_failed">创建文件夹失败</string>
     <string name="fm_delete_confirm_title">确认删除</string>
     <string name="fm_delete_confirm_message">确定删除 %1$d 个项目？此操作不可撤销。</string>
     <string name="fm_delete_failed">部分项目删除失败</string>
-    <string name="fm_paste_failed">部分项目粘贴失败</string>
     <string name="fm_conflict_title">文件已存在</string>
     <string name="fm_conflict_message">目标位置存在同名项目，如何处理？</string>
     <string name="fm_overwrite">覆盖</string>
@@ -86,6 +80,14 @@
     <string name="fm_extract_failed">解压失败</string>
     <string name="fm_compress_failed">压缩失败</string>
     <string name="fm_archive_failed">无法读取压缩包</string>
+    <string name="fm_open_with">打开方式</string>
+    <string name="fm_view_image">查看图片</string>
+    <string name="fm_edit">编辑</string>
+    <string name="fm_move">移动</string>
+    <string name="fm_move_failed">部分项目移动失败</string>
+    <string name="fm_copy_failed">部分项目复制失败</string>
+    <string name="fm_target_opposite">对面栏：%1$s</string>
+    <string name="fm_target_current">本栏：%1$s</string>
 
     <string name="action_toggle_soft_keyboard">键盘</string>
 

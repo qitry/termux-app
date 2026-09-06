@@ -128,6 +128,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
     @Override
     public void onBindViewHolder(@NonNull FileViewHolder holder, int position) {
         FileEntry entry = mItems.get(position);
+        holder.entry = entry;
 
         holder.icon.setImageResource(FileIcons.getIconRes(entry));
         if (!entry.isArchiveEntry() && FileIcons.isImage(entry) && entry.hostFile != null)
@@ -156,10 +157,16 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         return mItems.size();
     }
 
-    static class FileViewHolder extends RecyclerView.ViewHolder {
+    public FileEntry getEntryAt(int position) {
+        if (position < 0 || position >= mItems.size()) return null;
+        return mItems.get(position);
+    }
+
+    public static class FileViewHolder extends RecyclerView.ViewHolder {
         final ImageView icon;
         final TextView name;
         final TextView meta;
+        FileEntry entry;
 
         FileViewHolder(@NonNull View itemView) {
             super(itemView);

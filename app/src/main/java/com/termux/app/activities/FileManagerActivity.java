@@ -22,6 +22,7 @@ import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -49,7 +50,8 @@ public class FileManagerActivity extends AppCompatActivity {
     private static final int REQUEST_STORAGE_PERMISSIONS = 101;
 
     private static final int MENU_ITEM_NEW_FOLDER = 1;
-    private static final int MENU_ITEM_PASTE = 2;
+
+    private static final long MAX_EDITABLE_SIZE = 5 * 1024 * 1024;
 
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
@@ -59,9 +61,6 @@ public class FileManagerActivity extends AppCompatActivity {
     private FilePane mActivePane;
 
     private TextView mPathText;
-
-    private final List<FileEntry> mClipboard = new ArrayList<>();
-    private boolean mClipboardIsCut;
 
     private ActionMode mActionMode;
 
@@ -144,6 +143,24 @@ public class FileManagerActivity extends AppCompatActivity {
             }
         });
         pane.listView.setAdapter(pane.adapter);
+
+        // Horizontal swipe selects; a second swipe extends the range from the previous anchor.
+        ItemTouchHelper touchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0,
+            ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView,
+                                  @NonNull RecyclerView.ViewHolder viewHolder,
+                                  @NonNull RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                FileEntry entry = pane.adapter.getEntryAt(viewHolder.getBindingAdapterPosition());
+                if (entry != null) handleSwipeSelected(pane, entry);
+            }
+        });
+        touchHelper.attachToRecyclerView(pane.listView);
 
         pane.listView.setOnLongClickListener(v -> {
             if (mActionMode != null) return false;
@@ -272,27 +289,34 @@ public class FileManagerActivity extends AppCompatActivity {
         });
     }
 
-    private void handleFileLongClicked(FilePane pane, FileEntry entry) {
+    private void handleSwipeSelected(FilePane pane, FileEntry entry) {
         setActivePane(pane);
-        if (mActionMode == null)
+        if (mActionMode == null) {
             mActionMode = startSupportActionMode(new SelectionActionModeCallback());
-        mTermuxPane.adapter.clearSelection();
-        mAndroidPane.adapter.clearSelection();
-        pane.adapter.startSelection(entry);
+            mTermuxPane.adapter.clearSelection();
+            mAndroidPane.adapter.clearSelection();
+            pane.adapter.startSelection(entry);
+        } else {
+            pane.adapter.selectRange(entry);
+        }
     }
 
-    protected int getSelectedCount() {
-        return mTermuxPane.adapter.getSelectedCount() + mAndroidPane.adapter.getSelectedCount();
+    private void handleFileLongClicked(FilePane pane, FileEntry entry) {
+        setActivePane(pane);
+        List<FileEntry> targets;
+        if (mActionMode != null && pane.adapter.getSelected().contains(entry)) {
+            targets = getSelectedEntries();
+        } else {
+            targets = new ArrayList<>();
+            targets.add(entry);
+        }
+        showOperationsDialog(targets);
     }
 
     protected List<FileEntry> getSelectedEntries() {
         List<FileEntry> selected = new ArrayList<>(mTermuxPane.adapter.getSelected());
         selected.addAll(mAndroidPane.adapter.getSelected());
         return selected;
-    }
-
-    private static boolean isArchiveTarget(FileEntry entry) {
-        return entry.isArchiveEntry() || FileIcons.isArchiveName(entry.name);
     }
 
     private class SelectionActionModeCallback implements ActionMode.Callback {
@@ -304,46 +328,17 @@ public class FileManagerActivity extends AppCompatActivity {
 
         @Override
         public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-            List<FileEntry> selected = getSelectedEntries();
-            int count = selected.size();
-            menu.findItem(R.id.fm_menu_rename).setVisible(count == 1 && !selected.get(0).isArchiveEntry());
-            menu.findItem(R.id.fm_menu_extract).setVisible(count == 1 && isArchiveTarget(selected.get(0)));
-            boolean allReal = !selected.isEmpty();
-            for (FileEntry entry : selected) {
-                if (entry.isArchiveEntry()) { allReal = false; break; }
-            }
-            menu.findItem(R.id.fm_menu_compress).setVisible(allReal);
-            mode.setTitle(getString(R.string.fm_selected_count, count));
+            mode.setTitle(getString(R.string.fm_selected_count, getSelectedEntries().size()));
             return true;
         }
 
         @Override
         public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
-            int id = item.getItemId();
-            if (id == R.id.fm_menu_copy) {
-                setClipboard(false);
-                mode.finish();
-            } else if (id == R.id.fm_menu_cut) {
-                setClipboard(true);
-                mode.finish();
-            } else if (id == R.id.fm_menu_rename) {
-                renameSelected();
-                mode.finish();
-            } else if (id == R.id.fm_menu_select_all) {
+            if (item.getItemId() == R.id.fm_menu_select_all) {
                 mActivePane.adapter.selectAll();
-            } else if (id == R.id.fm_menu_delete) {
-                confirmDeleteSelected();
-                mode.finish();
-            } else if (id == R.id.fm_menu_extract) {
-                extractSelected();
-                mode.finish();
-            } else if (id == R.id.fm_menu_compress) {
-                promptCompressSelected();
-                mode.finish();
-            } else {
-                return false;
+                return true;
             }
-            return true;
+            return false;
         }
 
         @Override
@@ -354,20 +349,137 @@ public class FileManagerActivity extends AppCompatActivity {
         }
     }
 
-    private void setClipboard(boolean cut) {
-        mClipboard.clear();
-        for (FileEntry entry : getSelectedEntries()) {
-            if (!entry.isArchiveEntry()) mClipboard.add(entry);
+    // --- operations dialog ---
+
+    private void showOperationsDialog(List<FileEntry> targets) {
+        if (targets.isEmpty()) return;
+
+        final List<String> labels = new ArrayList<>();
+        final List<Runnable> actions = new ArrayList<>();
+        boolean single = targets.size() == 1;
+        FileEntry entry = single ? targets.get(0) : null;
+
+        if (single && entry.isArchiveEntry()) {
+            labels.add(getString(R.string.fm_extract));
+            actions.add(() -> extractEntries(targets));
+            labels.add(getString(R.string.fm_open_with));
+            actions.add(() -> openArchiveEntry(entry));
+        } else if (single && !entry.isDirectory && FileIcons.isArchiveName(entry.name)) {
+            labels.add(getString(R.string.fm_extract));
+            actions.add(() -> extractEntries(targets));
+            labels.add(getString(R.string.fm_open_with));
+            actions.add(() -> openFile(entry.hostFile));
+        } else if (single && FileIcons.isImage(entry)) {
+            labels.add(getString(R.string.fm_view_image));
+            actions.add(() -> openFile(entry.hostFile));
+            labels.add(getString(R.string.fm_open_with));
+            actions.add(() -> openFile(entry.hostFile));
+        } else if (single && FileIcons.isEditable(entry) && entry.hostFile != null && entry.size <= MAX_EDITABLE_SIZE) {
+            labels.add(getString(R.string.fm_edit));
+            actions.add(() -> openFile(entry.hostFile));
+            labels.add(getString(R.string.fm_open_with));
+            actions.add(() -> openFile(entry.hostFile));
+        } else if (single && !entry.isDirectory) {
+            labels.add(getString(R.string.fm_open_with));
+            actions.add(() -> openFile(entry.hostFile));
         }
-        mClipboardIsCut = cut;
-        Toast.makeText(this, cut ? R.string.fm_cut_count : R.string.fm_copied_count,
-            Toast.LENGTH_SHORT).show();
+
+        boolean allReal = true;
+        for (FileEntry target : targets) {
+            if (target.isArchiveEntry()) { allReal = false; break; }
+        }
+
+        if (single && !entry.isArchiveEntry()) {
+            labels.add(getString(R.string.fm_rename));
+            actions.add(() -> renameEntries(targets));
+        }
+        if (allReal) {
+            labels.add(getString(R.string.fm_compress));
+            actions.add(() -> promptCompress(targets));
+            labels.add(getString(R.string.fm_move));
+            actions.add(() -> pickTargetAndTransfer(targets, true));
+            labels.add(getString(R.string.fm_copy));
+            actions.add(() -> pickTargetAndTransfer(targets, false));
+            labels.add(getString(R.string.fm_delete));
+            actions.add(() -> confirmDelete(targets));
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle(single ? entry.name : getString(R.string.fm_selected_count, targets.size()))
+            .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> actions.get(which).run())
+            .show();
     }
 
-    private void extractSelected() {
-        List<FileEntry> selected = getSelectedEntries();
-        if (selected.size() != 1) return;
-        FileEntry entry = selected.get(0);
+    private void pickTargetAndTransfer(List<FileEntry> targets, boolean move) {
+        FilePane opposite = mActivePane == mTermuxPane ? mAndroidPane : mTermuxPane;
+        File activeDir = paneDiskDirectory(mActivePane);
+        File oppositeDir = paneDiskDirectory(opposite);
+
+        String[] options = {
+            getString(R.string.fm_target_opposite, oppositeDir.getAbsolutePath()),
+            getString(R.string.fm_target_current, activeDir.getAbsolutePath())
+        };
+        new AlertDialog.Builder(this)
+            .setTitle(move ? R.string.fm_move : R.string.fm_copy)
+            .setItems(options, (dialog, which) ->
+                transferEntries(targets, which == 0 ? oppositeDir : activeDir, move))
+            .show();
+    }
+
+    private void transferEntries(List<FileEntry> targets, File targetDir, boolean move) {
+        List<File> sources = new ArrayList<>();
+        for (FileEntry entry : targets) {
+            if (entry.hostFile != null) sources.add(entry.hostFile);
+        }
+        if (sources.isEmpty()) return;
+
+        boolean hasConflict = false;
+        for (File src : sources) {
+            if (new File(targetDir, src.getName()).exists()) {
+                hasConflict = true;
+                break;
+            }
+        }
+
+        if (hasConflict) {
+            new AlertDialog.Builder(this)
+                .setTitle(R.string.fm_conflict_title)
+                .setMessage(R.string.fm_conflict_message)
+                .setPositiveButton(R.string.fm_overwrite, (dialog, which) -> doTransfer(sources, targetDir, move))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } else {
+            doTransfer(sources, targetDir, move);
+        }
+    }
+
+    private void doTransfer(List<File> sources, File targetDir, boolean move) {
+        mExecutor.execute(() -> {
+            boolean failed = false;
+            for (File src : sources) {
+                File destination = new File(targetDir, src.getName());
+                if (destination.getAbsolutePath().equals(src.getAbsolutePath())) continue;
+                if (destination.exists() && !FileManagerUtils.deleteRecursive(destination)) {
+                    failed = true;
+                    continue;
+                }
+                boolean ok = move ? FileManagerUtils.move(src, destination)
+                    : FileManagerUtils.copyRecursive(src, destination);
+                if (!ok) failed = true;
+            }
+            boolean finalFailed = failed;
+            mHandler.post(() -> {
+                refreshBothPanes();
+                if (finalFailed)
+                    Toast.makeText(FileManagerActivity.this,
+                        move ? R.string.fm_move_failed : R.string.fm_copy_failed, Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
+    private void extractEntries(List<FileEntry> targets) {
+        if (targets.size() != 1) return;
+        FileEntry entry = targets.get(0);
         File targetDir = paneDiskDirectory(mActivePane);
 
         mExecutor.execute(() -> {
@@ -387,10 +499,9 @@ public class FileManagerActivity extends AppCompatActivity {
         });
     }
 
-    private void promptCompressSelected() {
-        List<FileEntry> selected = getSelectedEntries();
+    private void promptCompress(List<FileEntry> targets) {
         List<File> sources = new ArrayList<>();
-        for (FileEntry entry : selected) {
+        for (FileEntry entry : targets) {
             if (entry.hostFile != null) sources.add(entry.hostFile);
         }
         if (sources.isEmpty()) return;
@@ -428,10 +539,9 @@ public class FileManagerActivity extends AppCompatActivity {
         return name;
     }
 
-    private void renameSelected() {
-        List<FileEntry> selected = getSelectedEntries();
-        if (selected.size() != 1) return;
-        File file = selected.get(0).hostFile;
+    private void renameEntries(List<FileEntry> targets) {
+        if (targets.size() != 1) return;
+        File file = targets.get(0).hostFile;
         if (file == null) return;
 
         TextInputDialogUtils.textInput(this, R.string.fm_rename, file.getName(),
@@ -452,21 +562,20 @@ public class FileManagerActivity extends AppCompatActivity {
             }, -1, null, -1, null, null);
     }
 
-    private void confirmDeleteSelected() {
-        List<FileEntry> selected = getSelectedEntries();
-        if (selected.isEmpty()) return;
+    private void confirmDelete(List<FileEntry> targets) {
+        if (targets.isEmpty()) return;
 
         new AlertDialog.Builder(this)
             .setTitle(R.string.fm_delete_confirm_title)
-            .setMessage(getString(R.string.fm_delete_confirm_message, selected.size()))
+            .setMessage(getString(R.string.fm_delete_confirm_message, targets.size()))
             .setPositiveButton(R.string.fm_delete, (dialog, which) -> {
-                List<File> targets = new ArrayList<>();
-                for (FileEntry entry : selected) {
-                    if (entry.hostFile != null) targets.add(entry.hostFile);
+                List<File> files = new ArrayList<>();
+                for (FileEntry entry : targets) {
+                    if (entry.hostFile != null) files.add(entry.hostFile);
                 }
                 mExecutor.execute(() -> {
                     boolean failed = false;
-                    for (File file : targets) {
+                    for (File file : files) {
                         if (!FileManagerUtils.deleteRecursive(file)) failed = true;
                     }
                     boolean finalFailed = failed;
@@ -484,10 +593,8 @@ public class FileManagerActivity extends AppCompatActivity {
     private void showBackgroundMenu(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
         popup.getMenu().add(0, MENU_ITEM_NEW_FOLDER, 0, R.string.fm_new_folder);
-        popup.getMenu().add(0, MENU_ITEM_PASTE, 1, R.string.fm_paste);
         popup.setOnMenuItemClickListener(item -> {
             if (item.getItemId() == MENU_ITEM_NEW_FOLDER) promptNewFolder();
-            else if (item.getItemId() == MENU_ITEM_PASTE) pasteToActivePane();
             return true;
         });
         popup.show();
@@ -506,47 +613,6 @@ public class FileManagerActivity extends AppCompatActivity {
                     Toast.makeText(FileManagerActivity.this, R.string.fm_new_folder_failed, Toast.LENGTH_SHORT).show();
                 refreshPane(mActivePane);
             }, -1, null, -1, null, null);
-    }
-
-    private void pasteToActivePane() {
-        if (mClipboard.isEmpty()) {
-            Toast.makeText(this, R.string.fm_nothing_to_paste, Toast.LENGTH_SHORT).show();
-            return;
-        }
-        doPaste(mActivePane.currentDirectory, true);
-    }
-
-    private void doPaste(File targetDir, boolean overwrite) {
-        List<FileEntry> sources = new ArrayList<>(mClipboard);
-        boolean cut = mClipboardIsCut;
-        mClipboard.clear();
-        mClipboardIsCut = false;
-
-        mExecutor.execute(() -> {
-            boolean failed = false;
-            for (FileEntry source : sources) {
-                File src = source.hostFile;
-                if (src == null) continue;
-                File destination = new File(targetDir, src.getName());
-                if (destination.getAbsolutePath().equals(src.getAbsolutePath())) continue;
-                if (destination.exists()) {
-                    if (!overwrite) continue;
-                    if (!FileManagerUtils.deleteRecursive(destination)) {
-                        failed = true;
-                        continue;
-                    }
-                }
-                boolean ok = cut ? FileManagerUtils.move(src, destination)
-                    : FileManagerUtils.copyRecursive(src, destination);
-                if (!ok) failed = true;
-            }
-            boolean finalFailed = failed;
-            mHandler.post(() -> {
-                refreshBothPanes();
-                if (finalFailed)
-                    Toast.makeText(FileManagerActivity.this, R.string.fm_paste_failed, Toast.LENGTH_SHORT).show();
-            });
-        });
     }
 
     protected void refreshPane(FilePane pane) {

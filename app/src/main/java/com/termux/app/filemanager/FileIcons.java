@@ -48,6 +48,16 @@ public final class FileIcons {
             || "bmp".equals(ext) || "webp".equals(ext) || "heic".equals(ext);
     }
 
+    private static final java.util.Set<String> EDITABLE_EXTENSIONS = new java.util.HashSet<>(
+        java.util.Arrays.asList("txt", "md", "log", "conf", "ini", "properties", "csv", "json", "xml",
+            "yml", "yaml", "html", "css", "js", "ts", "java", "c", "cpp", "h", "hpp", "py", "sh",
+            "bash", "go", "rs", "rb", "php", "kt", "gradle"));
+
+    public static boolean isEditable(FileEntry entry) {
+        if (entry.isDirectory) return false;
+        return EDITABLE_EXTENSIONS.contains(extensionOf(entry.name));
+    }
+
     public static boolean isArchive(File file) {
         return isArchiveName(file.getName());
     }

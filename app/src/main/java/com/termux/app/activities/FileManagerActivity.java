@@ -198,6 +198,9 @@ public class FileManagerActivity extends AppCompatActivity {
 
             @Override
             public void onSelectionChanged(int count) {
+                // Only claim focus on real selections; clearing (action mode teardown) must not
+                // steal the active pane.
+                if (count > 0) setActivePane(pane);
                 if (mActionMode != null) mActionMode.invalidate();
             }
         });
@@ -235,6 +238,9 @@ public class FileManagerActivity extends AppCompatActivity {
             showBackgroundMenu(v);
             return true;
         });
+        // RecyclerView consumes touches, so empty-area taps never reach the container listener;
+        // focus the pane directly when tapping blank space inside the list.
+        pane.listView.setOnClickListener(v -> setActivePane(pane));
         pane.container.setOnClickListener(v -> setActivePane(pane));
     }
 

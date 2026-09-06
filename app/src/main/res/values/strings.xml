@@ -80,6 +80,7 @@
     <string name="fm_extract_failed">解压失败</string>
     <string name="fm_compress_failed">压缩失败</string>
     <string name="fm_archive_failed">无法读取压缩包</string>
+    <string name="fm_operation_failed">操作失败</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

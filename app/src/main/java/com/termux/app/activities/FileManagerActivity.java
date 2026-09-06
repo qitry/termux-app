@@ -53,6 +53,7 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private static final long MAX_EDITABLE_SIZE = 5 * 1024 * 1024;
 
+
     private final ExecutorService mExecutor = Executors.newSingleThreadExecutor();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
 
@@ -115,6 +116,19 @@ public class FileManagerActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         mExecutor.shutdownNow();
+    }
+
+    /** Runs a task off the main thread, never letting a stray exception crash the app. */
+    private void runBackground(Runnable task) {
+        mExecutor.execute(() -> {
+            try {
+                task.run();
+            } catch (Throwable t) {
+                android.util.Log.e("FileManager", "Background task failed", t);
+                mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
+                    R.string.fm_operation_failed, Toast.LENGTH_SHORT).show());
+            }
+        });
     }
 
     private void setupPane(FilePane pane, int containerId, int indicatorId, int listId, File root) {
@@ -190,7 +204,7 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     protected void loadPane(FilePane pane, File directory) {
-        mExecutor.execute(() -> {
+        runBackground(() -> {
             File[] files = directory.listFiles();
             List<FileEntry> entries = new ArrayList<>();
             if (files != null) {
@@ -208,10 +222,10 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void loadArchivePane(FilePane pane, File archive, String prefix) {
-        mExecutor.execute(() -> {
+        runBackground(() -> {
             List<FileEntry> entries;
             try {
-                entries = ArchiveSource.list(archive, prefix);
+                entries = ArchiveSource.list(archive, prefix, null);
             } catch (IOException e) {
                 mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
                     R.string.fm_archive_failed, Toast.LENGTH_SHORT).show());
@@ -276,10 +290,10 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void openArchiveEntry(FileEntry entry) {
-        mExecutor.execute(() -> {
+        runBackground(() -> {
             File cacheDir = new File(getCacheDir(), "fm_open");
             if (!cacheDir.isDirectory() && !cacheDir.mkdirs()) return;
-            if (!ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, cacheDir)) {
+            if (!ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, cacheDir, null)) {
                 mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
                     R.string.fm_extract_failed, Toast.LENGTH_SHORT).show());
                 return;
@@ -462,7 +476,7 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void doTransfer(List<File> sources, File targetDir, boolean move) {
-        mExecutor.execute(() -> {
+        runBackground(() -> {
             boolean failed = false;
             for (File src : sources) {
                 File destination = new File(targetDir, src.getName());
@@ -490,13 +504,13 @@ public class FileManagerActivity extends AppCompatActivity {
         FileEntry entry = targets.get(0);
         File targetDir = paneDiskDirectory(mActivePane);
 
-        mExecutor.execute(() -> {
+        runBackground(() -> {
             boolean ok;
             if (entry.isArchiveEntry()) {
-                ok = ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, targetDir);
+                ok = ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, targetDir, null);
             } else {
                 File destDir = new File(targetDir, baseNameOf(entry.hostFile));
-                ok = ArchiveSource.extractAll(entry.hostFile, destDir);
+                ok = ArchiveSource.extractAll(entry.hostFile, destDir, null);
             }
             boolean finalOk = ok;
             mHandler.post(() -> {
@@ -526,8 +540,8 @@ public class FileManagerActivity extends AppCompatActivity {
                 }
                 File destFile = new File(targetDir, name.endsWith(".zip") ? name : name + ".zip");
                 List<File> files = new ArrayList<>(sources);
-                mExecutor.execute(() -> {
-                    boolean ok = ArchiveSource.compressZip(files, destFile);
+                runBackground(() -> {
+                    boolean ok = ArchiveSource.compressZip(files, destFile, null);
                     mHandler.post(() -> {
                         refreshBothPanes();
                         if (!ok)
@@ -581,7 +595,7 @@ public class FileManagerActivity extends AppCompatActivity {
                 for (FileEntry entry : targets) {
                     if (entry.hostFile != null) files.add(entry.hostFile);
                 }
-                mExecutor.execute(() -> {
+                runBackground(() -> {
                     boolean failed = false;
                     for (File file : files) {
                         if (!FileManagerUtils.deleteRecursive(file)) failed = true;

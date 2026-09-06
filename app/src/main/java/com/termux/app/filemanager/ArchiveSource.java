@@ -1,12 +1,18 @@
 package com.termux.app.filemanager;
 
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.exception.ZipException;
+import net.lingala.zip4j.model.FileHeader;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.AesKeyStrength;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
+
 import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -18,46 +24,74 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
+/**
+ * Archive operations. zip/jar/apk go through zip4j (password support, Java 8 safe);
+ * tar/tgz/7z go through commons-compress 1.24 (the 1.26+ line uses {@code List.addLast},
+ * unavailable under this app's pinned desugar_jdk_libs 1.1.5).
+ */
 public final class ArchiveSource {
 
+    /** Thrown when an archive needs a password that was not supplied. */
+    public static class PasswordRequiredException extends IOException {
+        public PasswordRequiredException() { super("password required"); }
+    }
+
+    /** Thrown when a supplied password is wrong. */
+    public static class WrongPasswordException extends IOException {
+        public WrongPasswordException(Throwable cause) { super("wrong password", cause); }
+    }
+
+    public static boolean isZip(String name) {
+        String lower = name.toLowerCase(Locale.US);
+        return lower.endsWith(".zip") || lower.endsWith(".jar") || lower.endsWith(".war") || lower.endsWith(".apk");
+    }
+
     /** Lists the direct children of {@code prefix} ("" for archive root). */
-    public static List<FileEntry> list(File archive, String prefix) throws IOException {
-        String name = archive.getName().toLowerCase(Locale.US);
+    public static List<FileEntry> list(File archive, String prefix, char[] password) throws IOException {
+        String name = archive.getName();
         Map<String, FileEntry> children = new LinkedHashMap<>();
 
-        if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".war") || name.endsWith(".apk")) {
-            try (ZipFile zipFile = new ZipFile(archive)) {
-                Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
-                while (entries.hasMoreElements()) {
-                    ZipArchiveEntry entry = entries.nextElement();
-                    collect(children, archive, entry.getName(), entry.isDirectory(),
-                        entry.getSize(), entry.getLastModifiedTime().toMillis(), prefix);
+        if (isZip(name)) {
+            ZipFile zipFile = new ZipFile(archive);
+            try {
+                if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
+                if (password != null) zipFile.setPassword(password);
+                for (FileHeader header : zipFile.getFileHeaders()) {
+                    collect(children, archive, header.getFileName(), header.isDirectory(),
+                        header.getUncompressedSize(), header.getLastModifiedTime().getTime(), prefix);
                 }
+            } catch (net.lingala.zip4j.exception.ZipException e) {
+                throw wrapZip4j(e);
+            } finally {
+                closeQuietly(zipFile);
             }
-        } else if (name.endsWith(".7z")) {
-            try (SevenZFile sevenZFile = new SevenZFile(archive)) {
+        } else if (name.toLowerCase(Locale.US).endsWith(".7z")) {
+            try (SevenZFile sevenZFile = password != null
+                ? new SevenZFile(archive, password) : new SevenZFile(archive)) {
                 for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
                     collect(children, archive, entry.getName(), entry.isDirectory(),
                         entry.getSize(), entry.getLastModifiedDate().getTime(), prefix);
                 }
+            } catch (IOException e) {
+                if (password != null && isPasswordError(e)) throw new WrongPasswordException(e);
+                throw e;
             }
         } else if (isTar(name)) {
             try (InputStream in = openMaybeCompressed(archive);
-                 ArchiveInputStream<?> archiveIn =
+                 ArchiveInputStream archiveIn =
                      new ArchiveStreamFactory().createArchiveInputStream("tar", in)) {
                 ArchiveEntry entry;
                 while ((entry = archiveIn.getNextEntry()) != null) {
                     collect(children, archive, entry.getName(), entry.isDirectory(),
                         entry.getSize(), entry.getLastModifiedDate().getTime(), prefix);
                 }
-            } catch (org.apache.commons.compress.archivers.ArchiveException e) {
+            } catch (ArchiveException e) {
                 throw new IOException(e);
             }
         } else {
@@ -73,21 +107,33 @@ public final class ArchiveSource {
     }
 
     /** Extracts one entry (file or directory subtree) into {@code destDir}. */
-    public static boolean extractEntry(File archive, String entryPath, File destDir) {
-        String name = archive.getName().toLowerCase(Locale.US);
+    public static boolean extractEntry(File archive, String entryPath, File destDir, char[] password) {
+        String name = archive.getName();
         try {
-            if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".war") || name.endsWith(".apk")) {
-                try (ZipFile zipFile = new ZipFile(archive)) {
-                    Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
-                    while (entries.hasMoreElements()) {
-                        ZipArchiveEntry entry = entries.nextElement();
-                        String entryName = normalize(entry.getName());
+            if (isZip(name)) {
+                ZipFile zipFile = new ZipFile(archive);
+                try {
+                    if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
+                    if (password != null) zipFile.setPassword(password);
+                    for (FileHeader header : zipFile.getFileHeaders()) {
+                        String entryName = normalize(header.getFileName());
                         if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
-                        writeExtracted(archive, zipFile.getInputStream(entry), entryName, entry.isDirectory(), destDir);
+                        if (header.isDirectory()) {
+                            File dir = new File(destDir, entryName);
+                            if (!dir.isDirectory() && !dir.mkdirs()) return false;
+                        } else {
+                            zipFile.extractFile(header, destDir.getAbsolutePath());
+                        }
                     }
+                } catch (net.lingala.zip4j.exception.ZipException e) {
+                    if (isPasswordError(e)) return false;
+                    throw e;
+                } finally {
+                    closeQuietly(zipFile);
                 }
-            } else if (name.endsWith(".7z")) {
-                try (SevenZFile sevenZFile = new SevenZFile(archive)) {
+            } else if (name.toLowerCase(Locale.US).endsWith(".7z")) {
+                try (SevenZFile sevenZFile = password != null
+                    ? new SevenZFile(archive, password) : new SevenZFile(archive)) {
                     for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
                         String entryName = normalize(entry.getName());
                         if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
@@ -96,7 +142,7 @@ public final class ArchiveSource {
                 }
             } else if (isTar(name)) {
                 try (InputStream in = openMaybeCompressed(archive);
-                     ArchiveInputStream<?> archiveIn =
+                     ArchiveInputStream archiveIn =
                          new ArchiveStreamFactory().createArchiveInputStream("tar", in)) {
                     ArchiveEntry entry;
                     while ((entry = archiveIn.getNextEntry()) != null) {
@@ -104,7 +150,7 @@ public final class ArchiveSource {
                         if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
                         writeExtracted(archive, archiveIn, entryName, entry.isDirectory(), destDir);
                     }
-                } catch (org.apache.commons.compress.archivers.ArchiveException e) {
+                } catch (ArchiveException e) {
                     return false;
                 }
             } else {
@@ -117,27 +163,89 @@ public final class ArchiveSource {
     }
 
     /** Extracts the whole archive into {@code destDir}. */
-    public static boolean extractAll(File archive, File destDir) {
+    public static boolean extractAll(File archive, File destDir, char[] password) {
         String name = archive.getName().toLowerCase(Locale.US);
         if (name.endsWith(".gz") && !name.endsWith(".tar.gz") && !name.endsWith(".tgz")) {
             return extractBareCompressed(archive, destDir);
         }
-        return extractEntry(archive, "", destDir);
+        if (isZip(name)) {
+            ZipFile zipFile = new ZipFile(archive);
+            try {
+                if (zipFile.isEncrypted() && password == null) return false;
+                if (password != null) zipFile.setPassword(password);
+                zipFile.extractAll(destDir.getAbsolutePath());
+                return true;
+            } catch (net.lingala.zip4j.exception.ZipException e) {
+                return false;
+            } finally {
+                closeQuietly(zipFile);
+            }
+        }
+        return extractEntry(archive, "", destDir, password);
     }
 
-    /** Compresses {@code sources} into a zip file at {@code destFile}. */
-    public static boolean compressZip(List<File> sources, File destFile) {
-        try (ZipOutputStreamBridge bridge = new ZipOutputStreamBridge(destFile)) {
+    /** Compresses {@code sources} into a zip at {@code destFile}; optional AES-256 password. */
+    public static boolean compressZip(List<File> sources, File destFile, char[] password) {
+        boolean usePassword = password != null && password.length > 0;
+        ZipFile zipFile = usePassword ? new ZipFile(destFile, password) : new ZipFile(destFile);
+        try {
+            ZipParameters parameters = new ZipParameters();
+            parameters.setIncludeRootFolder(false);
+            if (usePassword) {
+                parameters.setEncryptFiles(true);
+                parameters.setEncryptionMethod(EncryptionMethod.AES);
+                parameters.setAesKeyStrength(AesKeyStrength.KEY_STRENGTH_256);
+            }
             for (File source : sources) {
-                addRecursive(bridge, source, source.getName());
+                if (source.isDirectory()) zipFile.addFolder(source, parameters);
+                else zipFile.addFile(source, parameters);
             }
             return true;
-        } catch (IOException e) {
+        } catch (ZipException e) {
             return false;
+        } finally {
+            closeQuietly(zipFile);
         }
     }
 
+    /** Whether the archive requires a password to open. */
+    public static boolean requiresPassword(File archive) {
+        if (isZip(archive.getName())) {
+            ZipFile zipFile = new ZipFile(archive);
+            try {
+                return zipFile.isEncrypted();
+            } finally {
+                closeQuietly(zipFile);
+            }
+        }
+        return false;
+    }
+
     // --- internals ---
+
+    private static IOException wrapZip4j(net.lingala.zip4j.exception.ZipException e) {
+        if (isPasswordError(e)) return new WrongPasswordException(e);
+        return e;
+    }
+
+    private static boolean isPasswordError(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof net.lingala.zip4j.exception.WrongPasswordException) return true;
+            String message = t.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.US);
+                if (lower.contains("password") || lower.contains("crypt")) return true;
+            }
+            if (t.getCause() == t) break;
+        }
+        return false;
+    }
+
+    private static void closeQuietly(ZipFile zipFile) {
+        try {
+            zipFile.close();
+        } catch (IOException ignored) { }
+    }
 
     private static void collect(Map<String, FileEntry> children, File archive, String rawEntryName,
                                 boolean isDirectory, long size, long date, String prefix) {
@@ -152,7 +260,6 @@ public final class ArchiveSource {
 
         int slash = entryName.indexOf('/');
         if (slash >= 0) {
-            // Deeper entry: surface its top segment as a directory.
             String dirName = entryName.substring(0, slash);
             if (!children.containsKey(dirName)) {
                 children.put(dirName, new FileEntry(dirName, true, 0, 0, null, archive,
@@ -208,8 +315,9 @@ public final class ArchiveSource {
     }
 
     private static boolean isTar(String name) {
-        return name.endsWith(".tar") || name.endsWith(".tar.gz") || name.endsWith(".tgz")
-            || name.endsWith(".tar.bz2") || name.endsWith(".tar.xz");
+        String lower = name.toLowerCase(Locale.US);
+        return lower.endsWith(".tar") || lower.endsWith(".tar.gz") || lower.endsWith(".tgz")
+            || lower.endsWith(".tar.bz2") || lower.endsWith(".tar.xz");
     }
 
     private static InputStream openMaybeCompressed(File archive) throws IOException {
@@ -217,20 +325,6 @@ public final class ArchiveSource {
         String name = archive.getName().toLowerCase(Locale.US);
         if (name.endsWith(".tar.gz") || name.endsWith(".tgz")) return new GZIPInputStream(in);
         return in;
-    }
-
-    private static void addRecursive(ZipOutputStreamBridge bridge, File file, String entryName) throws IOException {
-        if (file.isDirectory()) {
-            bridge.putDirectory(entryName + "/");
-            File[] children = file.listFiles();
-            if (children != null) {
-                for (File child : children) {
-                    addRecursive(bridge, child, entryName + "/" + child.getName());
-                }
-            }
-        } else {
-            bridge.putFile(file, entryName);
-        }
     }
 
     private ArchiveSource() { }

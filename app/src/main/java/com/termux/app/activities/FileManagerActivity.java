@@ -486,7 +486,7 @@ public class FileManagerActivity extends AppCompatActivity {
             .setMessage(R.string.fm_open_with_hint)
             .create();
         holder[0].show();
-        holder[0].getListView().setOnItemLongClickListener((list, position, id) -> {
+        holder[0].getListView().setOnItemLongClickListener((parent, view, position, id) -> {
             if (archiveEntry) return true;
             String mode = modes[position];
             setDefaultOpenMode(entry, MODE_SYSTEM.equals(mode) ? null : mode);

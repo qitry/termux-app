@@ -394,12 +394,17 @@ public class FileManagerActivity extends AppCompatActivity {
             loadPane(pane, entry.hostFile);
         } else if (FileIcons.isArchive(entry.hostFile)) {
             loadArchivePane(pane, entry.hostFile, "");
-        } else if (FileIcons.isImage(entry)) {
-            launchViewer(entry.hostFile);
-        } else if (FileIcons.isEditable(entry) && entry.size <= MAX_EDITABLE_SIZE) {
-            launchEditor(entry.hostFile);
         } else {
-            openFile(entry.hostFile);
+            String mode = getDefaultOpenMode(entry);
+            if (mode != null) {
+                openWithMode(entry, mode);
+            } else if (FileIcons.isImage(entry)) {
+                launchViewer(entry.hostFile);
+            } else if (FileIcons.isEditable(entry) && entry.size <= MAX_EDITABLE_SIZE) {
+                launchEditor(entry.hostFile);
+            } else {
+                openFile(entry.hostFile);
+            }
         }
     }
 
@@ -413,6 +418,75 @@ public class FileManagerActivity extends AppCompatActivity {
         Intent intent = new Intent(this, ImageViewerActivity.class);
         intent.putExtra(ImageViewerActivity.EXTRA_PATH, file.getAbsolutePath());
         startActivity(intent);
+    }
+
+    // --- open with / per-extension defaults ---
+
+    private static final String MODE_SYSTEM = "system";
+    private static final String MODE_EDITOR = "editor";
+    private static final String MODE_VIEWER = "viewer";
+    private static final String MODE_ARCHIVE = "archive";
+
+    private String getDefaultOpenMode(FileEntry entry) {
+        String mode = getSharedPreferences("file_manager", MODE_PRIVATE)
+            .getString("open_default_" + FileIcons.extensionOf(entry.name), null);
+        return mode == null || mode.isEmpty() ? null : mode;
+    }
+
+    private void setDefaultOpenMode(FileEntry entry, String mode) {
+        String ext = FileIcons.extensionOf(entry.name);
+        getSharedPreferences("file_manager", MODE_PRIVATE).edit()
+            .putString("open_default_" + ext, mode == null ? "" : mode).apply();
+        Toast.makeText(this, getString(R.string.fm_default_set,
+            ext.isEmpty() ? entry.name : "." + ext,
+            getString(modeLabelRes(mode))), Toast.LENGTH_SHORT).show();
+    }
+
+    private static int modeLabelRes(String mode) {
+        if (MODE_EDITOR.equals(mode)) return R.string.fm_mode_editor;
+        if (MODE_VIEWER.equals(mode)) return R.string.fm_mode_viewer;
+        if (MODE_ARCHIVE.equals(mode)) return R.string.fm_mode_archive;
+        return R.string.fm_mode_system;
+    }
+
+    private void openWithMode(FileEntry entry, String mode) {
+        if (MODE_EDITOR.equals(mode)) launchEditor(entry.hostFile);
+        else if (MODE_VIEWER.equals(mode)) launchViewer(entry.hostFile);
+        else if (MODE_ARCHIVE.equals(mode)) loadArchivePane(mActivePane, entry.hostFile, "");
+        else openFile(entry.hostFile);
+    }
+
+    private void showOpenWithDialog(FileEntry entry) {
+        final boolean archiveEntry = entry.isArchiveEntry();
+        final String[] modes = {MODE_SYSTEM, MODE_EDITOR, MODE_VIEWER, MODE_ARCHIVE};
+        final int[] labels = {R.string.fm_mode_system, R.string.fm_mode_editor,
+            R.string.fm_mode_viewer, R.string.fm_mode_archive};
+
+        List<String> items = new ArrayList<>();
+        for (int label : labels) items.add(getString(label));
+
+        final AlertDialog[] holder = new AlertDialog[1];
+        holder[0] = new AlertDialog.Builder(this)
+            .setTitle(R.string.fm_open_with)
+            .setItems(items.toArray(new CharSequence[0]), (dialog, which) -> {
+                String mode = modes[which];
+                if (archiveEntry) {
+                    if (MODE_SYSTEM.equals(mode)) openArchiveEntry(entry);
+                    else Toast.makeText(this, R.string.fm_mode_unsupported_in_archive, Toast.LENGTH_SHORT).show();
+                } else {
+                    openWithMode(entry, mode);
+                }
+            })
+            .setMessage(R.string.fm_open_with_hint)
+            .create();
+        holder[0].show();
+        holder[0].getListView().setOnItemLongClickListener((list, position, id) -> {
+            if (archiveEntry) return true;
+            String mode = modes[position];
+            setDefaultOpenMode(entry, MODE_SYSTEM.equals(mode) ? null : mode);
+            holder[0].dismiss();
+            return true;
+        });
     }
 
     private void openArchiveEntry(FileEntry entry) {
@@ -503,15 +577,15 @@ public class FileManagerActivity extends AppCompatActivity {
             addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openArchiveEntry(entry));
         } else if (single && !entry.isDirectory && FileIcons.isArchiveName(entry.name)) {
             addOp(labels, icons, actions, R.string.fm_extract, R.drawable.ic_fm_extract, () -> extractEntries(targets));
-            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> showOpenWithDialog(entry));
         } else if (single && FileIcons.isImage(entry)) {
             addOp(labels, icons, actions, R.string.fm_view_image, R.drawable.ic_fm_image, () -> launchViewer(entry.hostFile));
-            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> showOpenWithDialog(entry));
         } else if (single && FileIcons.isEditable(entry) && entry.hostFile != null && entry.size <= MAX_EDITABLE_SIZE) {
             addOp(labels, icons, actions, R.string.fm_edit, R.drawable.ic_fm_code, () -> launchEditor(entry.hostFile));
-            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> showOpenWithDialog(entry));
         } else if (single && !entry.isDirectory) {
-            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> showOpenWithDialog(entry));
         }
 
         boolean allReal = true;

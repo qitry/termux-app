@@ -2,7 +2,6 @@ package com.termux.app.crash;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.os.Process;
 import android.util.Log;
 
 import com.termux.app.activities.CrashReportActivity;

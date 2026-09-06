@@ -872,7 +872,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // hides the blurred terminal, making the blur invisible on dark shell screens.
         drawerLayout.setScrimColor(Color.TRANSPARENT);
 
-        mDrawerBlurEffect = RenderEffect.createBlurEffect(20f, 20f, Shader.TileMode.CLAMP);
+        mDrawerBlurEffect = RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP);
         mDrawerOriginalEffect = RenderEffect.createOffsetEffect(0f, 0f);
 
         View leftDrawer = findViewById(R.id.left_drawer);
@@ -880,6 +880,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
                 updateDrawerBlur(leftDrawer, slideOffset);
+            }
+
+            @Override
+            public void onDrawerOpened(View drawerView) {
+                updateDrawerBlur(leftDrawer, 1f);
             }
 
             @Override
@@ -908,14 +913,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int width = drawerView.getWidth();
         if (width <= 0) return;
 
-        // Blur exactly the strip the drawer currently covers, with a small soft edge, so the
-        // blurred region grows in sync with the drawer instead of appearing before it slides out.
+        // Blur exactly the strip the drawer currently covers. The soft edge sits just past the
+        // drawer boundary so the whole drawer area is fully blurred, while the transition to the
+        // sharp terminal happens outside, hidden by the drawer's edge shadow.
         float edge = width * slideOffset;
-        float fade = Math.min(16f, edge / 2f);
+        float fade = Math.min(16f, edge);
+        float total = edge + fade;
 
-        LinearGradient mask = new LinearGradient(0, 0, edge, 0,
+        LinearGradient mask = new LinearGradient(0, 0, total, 0,
             new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
-            new float[]{0f, (edge - fade) / edge, 1f}, Shader.TileMode.CLAMP);
+            new float[]{0f, edge / total, 1f}, Shader.TileMode.CLAMP);
 
         RenderEffect blurred = RenderEffect.createBlendModeEffect(
             mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);

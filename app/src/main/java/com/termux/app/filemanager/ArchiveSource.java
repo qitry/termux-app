@@ -64,7 +64,7 @@ public final class ArchiveSource {
                 if (password != null) zipFile.setPassword(password);
                 for (FileHeader header : zipFile.getFileHeaders()) {
                     collect(children, archive, header.getFileName(), header.isDirectory(),
-                        header.getUncompressedSize(), header.getLastModifiedTime().getTime(), prefix);
+                        header.getUncompressedSize(), header.getLastModifiedTime(), prefix);
                 }
             } catch (net.lingala.zip4j.exception.ZipException e) {
                 throw wrapZip4j(e);
@@ -230,7 +230,7 @@ public final class ArchiveSource {
                 for (FileHeader header : zipFile.getFileHeaders()) {
                     addSearchResult(results, archive, normalize(header.getFileName()),
                         header.isDirectory(), header.getUncompressedSize(),
-                        header.getLastModifiedTime().getTime(), lower);
+                        header.getLastModifiedTime(), lower);
                 }
             } catch (net.lingala.zip4j.exception.ZipException e) {
                 throw wrapZip4j(e);

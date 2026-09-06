@@ -42,8 +42,10 @@ import com.termux.shared.termux.interact.TextInputDialogUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -87,8 +89,23 @@ public class FileManagerActivity extends AppCompatActivity {
         String archivePrefix = "";
         /** Non-null while showing search results instead of a directory listing. */
         String searchQuery;
+        final Deque<PaneLocation> history = new ArrayDeque<>();
         /** SharedPreferences key under which this pane's location is remembered. */
         String prefsKey;
+    }
+
+    private static class PaneLocation {
+        final File directory;
+        final File archive;
+        final String prefix;
+
+        PaneLocation(File directory) {
+            this.directory = directory; this.archive = null; this.prefix = null;
+        }
+
+        PaneLocation(File archive, String prefix) {
+            this.directory = null; this.archive = archive; this.prefix = prefix;
+        }
     }
 
     @Override
@@ -290,7 +307,7 @@ public class FileManagerActivity extends AppCompatActivity {
                 pane.archivePrefix = "";
                 pane.currentDirectory = directory;
                 pane.searchQuery = null;
-                pane.adapter.setItems(entries);
+                applyEntries(pane, entries);
                 if (pane == mActivePane) updatePathText();
                 persistPane(pane);
             });
@@ -321,7 +338,7 @@ public class FileManagerActivity extends AppCompatActivity {
             pane.archiveContext = archive;
             pane.archivePrefix = prefix;
             pane.searchQuery = null;
-            pane.adapter.setItems(entries);
+            applyEntries(pane, entries);
             if (pane == mActivePane) updatePathText();
             persistPane(pane);
         });
@@ -369,6 +386,35 @@ public class FileManagerActivity extends AppCompatActivity {
         if (!ok) Toast.makeText(this, R.string.fm_extract_failed, Toast.LENGTH_SHORT).show();
     }
 
+    private void applyEntries(FilePane pane, List<FileEntry> entries) {
+        List<FileEntry> display = new ArrayList<>();
+        if (!pane.history.isEmpty())
+            display.add(FileEntry.special(getString(R.string.fm_back_to_previous), FileEntry.SPECIAL_BACK));
+        if (canGoUp(pane))
+            display.add(FileEntry.special("..", FileEntry.SPECIAL_PARENT));
+        display.addAll(entries);
+        pane.adapter.setItems(display);
+    }
+
+    private boolean canGoUp(FilePane pane) {
+        if (pane.archiveContext != null) return true;
+        return !pane.currentDirectory.getAbsolutePath().equals(pane.rootDirectory.getAbsolutePath());
+    }
+
+    private void pushHistory(FilePane pane) {
+        pane.history.addLast(pane.archiveContext != null
+            ? new PaneLocation(pane.archiveContext, pane.archivePrefix)
+            : new PaneLocation(pane.currentDirectory));
+        while (pane.history.size() > 50) pane.history.removeFirst();
+    }
+
+    private void popHistory(FilePane pane) {
+        PaneLocation location = pane.history.pollLast();
+        if (location == null) return;
+        if (location.archive != null) loadArchivePane(pane, location.archive, location.prefix);
+        else loadPane(pane, location.directory);
+    }
+
     private static void sortEntries(List<FileEntry> entries) {
         Collections.sort(entries, (a, b) -> {
             if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
@@ -382,7 +428,10 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void navigateUp() {
-        FilePane pane = mActivePane;
+        navigateUp(mActivePane);
+    }
+
+    private void navigateUp(FilePane pane) {
         if (pane.archiveContext != null) {
             String prefix = pane.archivePrefix;
             if (!prefix.isEmpty()) {
@@ -402,8 +451,18 @@ public class FileManagerActivity extends AppCompatActivity {
     private void handleFileClicked(FilePane pane, FileEntry entry) {
         setActivePane(pane);
         if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) return;
+        if (entry.special == FileEntry.SPECIAL_BACK) {
+            popHistory(pane);
+            return;
+        }
+        if (entry.special == FileEntry.SPECIAL_PARENT) {
+            pushHistory(pane);
+            navigateUp(pane);
+            return;
+        }
         if (entry.isArchiveEntry()) {
             if (entry.isDirectory) {
+                pushHistory(pane);
                 loadArchivePane(pane, entry.archiveHostFile, entry.archiveEntryPath);
             } else {
                 openArchiveEntry(entry);
@@ -411,8 +470,10 @@ public class FileManagerActivity extends AppCompatActivity {
             return;
         }
         if (entry.isDirectory) {
+            pushHistory(pane);
             loadPane(pane, entry.hostFile);
         } else if (FileIcons.isArchive(entry.hostFile)) {
+            pushHistory(pane);
             loadArchivePane(pane, entry.hostFile, "");
         } else {
             String mode = getDefaultOpenMode(entry);
@@ -1006,13 +1067,16 @@ public class FileManagerActivity extends AppCompatActivity {
                 File file = new File(target);
                 pane.searchQuery = null;
                 if (file.isDirectory()) {
+                    pushHistory(pane);
                     loadPane(pane, file);
                 } else if (file.isFile() && FileIcons.isArchiveName(file.getName())) {
+                    pushHistory(pane);
                     loadArchivePane(pane, file, "");
                 } else {
                     File archive = resolveArchivePath(target);
                     if (archive != null) {
                         String prefix = target.substring(archive.getAbsolutePath().length() + 1);
+                        pushHistory(pane);
                         loadArchivePane(pane, archive, prefix);
                     } else {
                         Toast.makeText(FileManagerActivity.this, R.string.fm_invalid_path, Toast.LENGTH_SHORT).show();
@@ -1073,6 +1137,7 @@ public class FileManagerActivity extends AppCompatActivity {
             return;
         }
         if (pane.archiveContext != null || !pane.currentDirectory.getAbsolutePath().equals(pane.rootDirectory.getAbsolutePath())) {
+            pushHistory(pane);
             navigateUp();
             return;
         }

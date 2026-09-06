@@ -3,4 +3,6 @@
     <!-- 半透明侧栏背景，配合模糊效果使用 -->
     <color name="drawer_background_light">#80FFFFFF</color>
     <color name="drawer_background_dark">#801B1D1F</color>
+    <!-- 侧栏顶栏不透明背景 -->
+    <color name="drawer_header_background">#FFFFFFFF</color>
 </resources>

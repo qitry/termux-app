@@ -272,19 +272,6 @@ public final class ArchiveSource {
         out.add(new FileEntry(name, isDirectory, size, date, null, archive, name));
     }
 
-    /** Whether the archive requires a password to open. */
-    public static boolean requiresPassword(File archive) {
-        if (isZip(archive.getName())) {
-            ZipFile zipFile = new ZipFile(archive);
-            try {
-                return zipFile.isEncrypted();
-            } finally {
-                closeQuietly(zipFile);
-            }
-        }
-        return false;
-    }
-
     // --- internals ---
 
     private static IOException wrapZip4j(net.lingala.zip4j.exception.ZipException e) {

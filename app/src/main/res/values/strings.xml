@@ -90,6 +90,19 @@
     <string name="fm_searching">搜索：%1$s</string>
     <string name="fm_path_jump">跳转到路径</string>
     <string name="fm_invalid_path">路径不存在</string>
+
+    <!-- 崩溃报告 -->
+    <string name="crash_title">应用崩溃报告</string>
+    <string name="crash_share">分享</string>
+    <string name="crash_export">导出</string>
+    <string name="crash_upload">上传 LogShare</string>
+    <string name="crash_uploaded">上传成功</string>
+    <string name="crash_upload_failed">上传失败</string>
+    <string name="crash_exported">已导出：%1$s</string>
+    <string name="crash_export_failed">导出失败</string>
+    <string name="crash_copy_link">复制链接</string>
+    <string name="crash_open_link">打开链接</string>
+    <string name="crash_copied">已复制到剪贴板</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

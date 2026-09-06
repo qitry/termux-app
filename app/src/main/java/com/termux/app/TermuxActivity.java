@@ -48,7 +48,7 @@ import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.app.activities.FileManagerActivity;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
-import com.termux.shared.termux.crash.TermuxCrashUtils;
+import com.termux.app.crash.CrashReportLauncher;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
@@ -342,9 +342,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
 
-        // Check if a crash happened on last run of the app or if a plugin crashed and show a
-        // notification with the crash details if it did
-        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG);
+        // Check if a crash happened on last run of the app and show a crash report screen if it did
+        CrashReportLauncher.checkAndShow(this);
 
         mIsOnResumeAfterOnCreate = false;
     }
@@ -1059,7 +1058,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 switch (intent.getAction()) {
                     case TERMUX_ACTIVITY.ACTION_NOTIFY_APP_CRASH:
                         Logger.logDebug(LOG_TAG, "Received intent to notify app crash");
-                        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(context, LOG_TAG);
+                        CrashReportLauncher.checkAndShow(TermuxActivity.this);
                         return;
                     case TERMUX_ACTIVITY.ACTION_RELOAD_STYLE:
                         Logger.logDebug(LOG_TAG, "Received intent to reload styling");

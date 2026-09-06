@@ -81,6 +81,10 @@ public class FileManagerActivity extends AppCompatActivity {
         File archiveContext;
         /** Entry path prefix inside {@link #archiveContext}; "" for archive root. */
         String archivePrefix = "";
+        /** Non-null while showing search results instead of a directory listing. */
+        String searchQuery;
+        /** SharedPreferences key under which this pane's location is remembered. */
+        String prefsKey;
     }
 
     @Override
@@ -89,8 +93,10 @@ public class FileManagerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_file_manager);
 
         mPathText = findViewById(R.id.file_manager_path);
-        findViewById(R.id.file_manager_up).setOnClickListener(v -> navigateUp());
+        findViewById(R.id.file_manager_terminal).setOnClickListener(v -> finish());
+        findViewById(R.id.file_manager_search).setOnClickListener(v -> promptSearch());
         findViewById(R.id.file_manager_refresh).setOnClickListener(v -> refreshPane(mActivePane));
+        mPathText.setOnClickListener(v -> promptPathJump());
 
         setupPane(mTermuxPane, R.id.termux_pane_container, R.id.termux_pane_indicator, R.id.termux_pane_list,
             new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
@@ -99,8 +105,8 @@ public class FileManagerActivity extends AppCompatActivity {
 
         setActivePane(mTermuxPane);
 
-        loadPane(mTermuxPane, mTermuxPane.rootDirectory);
-        loadPane(mAndroidPane, mAndroidPane.rootDirectory);
+        restorePane(mTermuxPane, "pane_termux");
+        restorePane(mAndroidPane, "pane_android");
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             && !PermissionUtils.checkPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
@@ -134,6 +140,36 @@ public class FileManagerActivity extends AppCompatActivity {
                     R.string.fm_operation_failed, Toast.LENGTH_SHORT).show());
             }
         });
+    }
+
+    private void restorePane(FilePane pane, String key) {
+        pane.prefsKey = key;
+        String saved = getSharedPreferences("file_manager", MODE_PRIVATE).getString(key, null);
+        if (saved != null) {
+            int sep = saved.indexOf('|');
+            if (sep >= 0) {
+                File archive = new File(saved.substring(0, sep));
+                if (archive.isFile()) {
+                    loadArchivePane(pane, archive, saved.substring(sep + 1));
+                    return;
+                }
+            } else {
+                File directory = new File(saved);
+                if (directory.isDirectory()) {
+                    loadPane(pane, directory);
+                    return;
+                }
+            }
+        }
+        loadPane(pane, pane.rootDirectory);
+    }
+
+    private void persistPane(FilePane pane) {
+        if (pane.prefsKey == null || pane.searchQuery != null) return;
+        String value = pane.archiveContext != null
+            ? pane.archiveContext.getAbsolutePath() + "|" + pane.archivePrefix
+            : pane.currentDirectory.getAbsolutePath();
+        getSharedPreferences("file_manager", MODE_PRIVATE).edit().putString(pane.prefsKey, value).apply();
     }
 
     private void setupPane(FilePane pane, int containerId, int indicatorId, int listId, File root) {
@@ -199,7 +235,9 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private void updatePathText() {
         if (mActivePane == null) return;
-        if (mActivePane.archiveContext != null) {
+        if (mActivePane.searchQuery != null) {
+            mPathText.setText(getString(R.string.fm_searching, mActivePane.searchQuery));
+        } else if (mActivePane.archiveContext != null) {
             String path = mActivePane.archiveContext.getAbsolutePath();
             if (!mActivePane.archivePrefix.isEmpty()) path += "/" + mActivePane.archivePrefix;
             mPathText.setText(path);
@@ -220,8 +258,10 @@ public class FileManagerActivity extends AppCompatActivity {
                 pane.archiveContext = null;
                 pane.archivePrefix = "";
                 pane.currentDirectory = directory;
+                pane.searchQuery = null;
                 pane.adapter.setItems(entries);
                 if (pane == mActivePane) updatePathText();
+                persistPane(pane);
             });
         });
     }
@@ -249,8 +289,10 @@ public class FileManagerActivity extends AppCompatActivity {
         mHandler.post(() -> {
             pane.archiveContext = archive;
             pane.archivePrefix = prefix;
+            pane.searchQuery = null;
             pane.adapter.setItems(entries);
             if (pane == mActivePane) updatePathText();
+            persistPane(pane);
         });
     }
 
@@ -703,8 +745,125 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     protected void refreshPane(FilePane pane) {
-        if (pane.archiveContext != null) loadArchivePane(pane, pane.archiveContext, pane.archivePrefix);
+        if (pane.searchQuery != null) startSearch(pane, pane.searchQuery);
+        else if (pane.archiveContext != null) loadArchivePane(pane, pane.archiveContext, pane.archivePrefix);
         else loadPane(pane, pane.currentDirectory);
+    }
+
+    // --- search ---
+
+    private void promptSearch() {
+        TextInputDialogUtils.textInput(this, R.string.fm_search, "",
+            R.string.fm_search, text -> {
+                String query = text.trim();
+                if (query.isEmpty()) return;
+                startSearch(mActivePane, query);
+            }, -1, null, -1, null, null);
+    }
+
+    private void startSearch(FilePane pane, String query) {
+        pane.searchQuery = query;
+        if (pane.archiveContext != null) {
+            File archive = pane.archiveContext;
+            runBackground(() -> {
+                char[] password = mArchivePasswords.get(archive.getAbsolutePath());
+                List<FileEntry> results;
+                try {
+                    results = ArchiveSource.search(archive, query, password);
+                } catch (IOException e) {
+                    mHandler.post(() -> {
+                        pane.searchQuery = null;
+                        refreshPane(pane);
+                        Toast.makeText(FileManagerActivity.this, R.string.fm_archive_failed, Toast.LENGTH_SHORT).show();
+                    });
+                    return;
+                }
+                mHandler.post(() -> {
+                    pane.adapter.setItems(results);
+                    if (pane == mActivePane) updatePathText();
+                });
+            });
+        } else {
+            File root = pane.currentDirectory;
+            runBackground(() -> {
+                List<FileEntry> results = new ArrayList<>();
+                searchWalk(root, root, query.toLowerCase(Locale.US), results, 0);
+                mHandler.post(() -> {
+                    pane.adapter.setItems(results);
+                    if (pane == mActivePane) updatePathText();
+                });
+            });
+        }
+    }
+
+    private void searchWalk(File dir, File root, String lowerQuery, List<FileEntry> out, int depth) {
+        if (depth > 12 || out.size() >= 500) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (out.size() >= 500) return;
+            if (file.getName().toLowerCase(Locale.US).contains(lowerQuery)) {
+                String relative = file.getAbsolutePath().substring(root.getAbsolutePath().length() + 1);
+                out.add(new FileEntry(relative, file.isDirectory(), file.length(), file.lastModified(),
+                    file, null, null));
+            }
+            if (file.isDirectory() && !isSymlink(file))
+                searchWalk(file, root, lowerQuery, out, depth + 1);
+        }
+    }
+
+    private static boolean isSymlink(File file) {
+        try {
+            return !file.getCanonicalFile().equals(file.getAbsoluteFile());
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    private void exitSearch(FilePane pane) {
+        pane.searchQuery = null;
+        refreshPane(pane);
+    }
+
+    // --- path jump ---
+
+    private void promptPathJump() {
+        FilePane pane = mActivePane;
+        String current = pane.archiveContext != null
+            ? pane.archiveContext.getAbsolutePath() + (pane.archivePrefix.isEmpty() ? "" : "/" + pane.archivePrefix)
+            : pane.currentDirectory.getAbsolutePath();
+
+        TextInputDialogUtils.textInput(this, R.string.fm_path_jump, current,
+            R.string.fm_confirm, text -> {
+                String target = text.trim();
+                if (target.isEmpty()) return;
+                File file = new File(target);
+                pane.searchQuery = null;
+                if (file.isDirectory()) {
+                    loadPane(pane, file);
+                } else if (file.isFile() && FileIcons.isArchiveName(file.getName())) {
+                    loadArchivePane(pane, file, "");
+                } else {
+                    File archive = resolveArchivePath(target);
+                    if (archive != null) {
+                        String prefix = target.substring(archive.getAbsolutePath().length() + 1);
+                        loadArchivePane(pane, archive, prefix);
+                    } else {
+                        Toast.makeText(FileManagerActivity.this, R.string.fm_invalid_path, Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }, -1, null, -1, null, null);
+    }
+
+    /** For "/a/b/c.zip/inner/x", returns the existing archive file "/a/b/c.zip" or null. */
+    private File resolveArchivePath(String target) {
+        File file = new File(target);
+        while (file != null && file.getParentFile() != null) {
+            File parent = file.getParentFile();
+            if (parent.isFile() && FileIcons.isArchiveName(parent.getName())) return parent;
+            file = parent;
+        }
+        return null;
     }
 
     protected void refreshBothPanes() {
@@ -743,6 +902,10 @@ public class FileManagerActivity extends AppCompatActivity {
             return;
         }
         FilePane pane = mActivePane;
+        if (pane.searchQuery != null) {
+            exitSearch(pane);
+            return;
+        }
         if (pane.archiveContext != null || !pane.currentDirectory.getAbsolutePath().equals(pane.rootDirectory.getAbsolutePath())) {
             navigateUp();
             return;

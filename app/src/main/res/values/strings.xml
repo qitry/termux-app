@@ -85,6 +85,11 @@
     <string name="fm_wrong_password">密码错误</string>
     <string name="fm_compress_password">设置压缩包密码（可跳过）</string>
     <string name="fm_no_password">不加密</string>
+    <string name="fm_back_to_terminal">返回终端</string>
+    <string name="fm_search">搜索</string>
+    <string name="fm_searching">搜索：%1$s</string>
+    <string name="fm_path_jump">跳转到路径</string>
+    <string name="fm_invalid_path">路径不存在</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

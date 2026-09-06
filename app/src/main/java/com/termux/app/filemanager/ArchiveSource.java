@@ -217,6 +217,61 @@ public final class ArchiveSource {
         }
     }
 
+    /** Searches all entry paths (case-insensitive contains), name = full entry path. */
+    public static List<FileEntry> search(File archive, String query, char[] password) throws IOException {
+        String lower = query.toLowerCase(Locale.US);
+        List<FileEntry> results = new ArrayList<>();
+
+        if (isZip(archive.getName())) {
+            ZipFile zipFile = new ZipFile(archive);
+            try {
+                if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
+                if (password != null) zipFile.setPassword(password);
+                for (FileHeader header : zipFile.getFileHeaders()) {
+                    addSearchResult(results, archive, normalize(header.getFileName()),
+                        header.isDirectory(), header.getUncompressedSize(),
+                        header.getLastModifiedTime().getTime(), lower);
+                }
+            } catch (net.lingala.zip4j.exception.ZipException e) {
+                throw wrapZip4j(e);
+            } finally {
+                closeQuietly(zipFile);
+            }
+        } else if (archive.getName().toLowerCase(Locale.US).endsWith(".7z")) {
+            try (SevenZFile sevenZFile = password != null
+                ? new SevenZFile(archive, password) : new SevenZFile(archive)) {
+                for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
+                    addSearchResult(results, archive, normalize(entry.getName()),
+                        entry.isDirectory(), entry.getSize(), entry.getLastModifiedDate().getTime(), lower);
+                }
+            }
+        } else if (isTar(archive.getName())) {
+            try (InputStream in = openMaybeCompressed(archive);
+                 ArchiveInputStream archiveIn =
+                     new ArchiveStreamFactory().createArchiveInputStream("tar", in)) {
+                ArchiveEntry entry;
+                while ((entry = archiveIn.getNextEntry()) != null) {
+                    addSearchResult(results, archive, normalize(entry.getName()),
+                        entry.isDirectory(), entry.getSize(), entry.getLastModifiedDate().getTime(), lower);
+                }
+            } catch (ArchiveException e) {
+                throw new IOException(e);
+            }
+        }
+
+        Collections.sort(results, (a, b) -> {
+            if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
+            return String.CASE_INSENSITIVE_ORDER.compare(a.name, b.name);
+        });
+        return results;
+    }
+
+    private static void addSearchResult(List<FileEntry> out, File archive, String name,
+                                        boolean isDirectory, long size, long date, String lowerQuery) {
+        if (out.size() >= 500 || name.isEmpty() || !name.toLowerCase(Locale.US).contains(lowerQuery)) return;
+        out.add(new FileEntry(name, isDirectory, size, date, null, archive, name));
+    }
+
     /** Whether the archive requires a password to open. */
     public static boolean requiresPassword(File archive) {
         if (isZip(archive.getName())) {

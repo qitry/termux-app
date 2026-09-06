@@ -294,7 +294,9 @@ public final class ArchiveSource {
 
     private static boolean isPasswordError(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof net.lingala.zip4j.exception.WrongPasswordException) return true;
+            if (t instanceof net.lingala.zip4j.exception.ZipException
+                && ((net.lingala.zip4j.exception.ZipException) t).getType()
+                    == net.lingala.zip4j.exception.ZipException.Type.WRONG_PASSWORD) return true;
             String message = t.getMessage();
             if (message != null) {
                 String lower = message.toLowerCase(Locale.US);

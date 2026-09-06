@@ -40,8 +40,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -64,6 +66,9 @@ public class FileManagerActivity extends AppCompatActivity {
     private TextView mPathText;
 
     private ActionMode mActionMode;
+
+    /** Cached archive passwords keyed by archive absolute path. */
+    private final Map<String, char[]> mArchivePasswords = new HashMap<>();
 
     protected class FilePane {
         View container;
@@ -222,22 +227,73 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void loadArchivePane(FilePane pane, File archive, String prefix) {
-        runBackground(() -> {
-            List<FileEntry> entries;
-            try {
-                entries = ArchiveSource.list(archive, prefix, null);
-            } catch (IOException e) {
-                mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
-                    R.string.fm_archive_failed, Toast.LENGTH_SHORT).show());
-                return;
-            }
-            mHandler.post(() -> {
-                pane.archiveContext = archive;
-                pane.archivePrefix = prefix;
-                pane.adapter.setItems(entries);
-                if (pane == mActivePane) updatePathText();
-            });
+        runBackground(() -> doLoadArchivePane(pane, archive, prefix, true));
+    }
+
+    private void doLoadArchivePane(FilePane pane, File archive, String prefix, boolean allowPrompt) {
+        char[] password = mArchivePasswords.get(archive.getAbsolutePath());
+        List<FileEntry> entries;
+        try {
+            entries = ArchiveSource.list(archive, prefix, password);
+        } catch (ArchiveSource.PasswordRequiredException | ArchiveSource.WrongPasswordException e) {
+            mArchivePasswords.remove(archive.getAbsolutePath());
+            if (allowPrompt) promptArchivePassword(archive, () -> doLoadArchivePane(pane, archive, prefix, false));
+            else mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
+                R.string.fm_wrong_password, Toast.LENGTH_SHORT).show());
+            return;
+        } catch (IOException e) {
+            mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
+                R.string.fm_archive_failed, Toast.LENGTH_SHORT).show());
+            return;
+        }
+        mHandler.post(() -> {
+            pane.archiveContext = archive;
+            pane.archivePrefix = prefix;
+            pane.adapter.setItems(entries);
+            if (pane == mActivePane) updatePathText();
         });
+    }
+
+    private void promptArchivePassword(File archive, Runnable onEntered) {
+        mHandler.post(() -> TextInputDialogUtils.textInput(this, R.string.fm_password_title, "",
+            R.string.fm_confirm, text -> {
+                mArchivePasswords.put(archive.getAbsolutePath(), text.toCharArray());
+                runBackground(onEntered);
+            }, -1, null, -1, null, null));
+    }
+
+    /** Runs an archive operation, prompting for a password when required. */
+    private interface ArchiveOp {
+        boolean run(char[] password) throws IOException;
+    }
+
+    private void withArchivePassword(File archive, ArchiveOp op) {
+        runBackground(() -> {
+            char[] password = mArchivePasswords.get(archive.getAbsolutePath());
+            try {
+                if (!op.run(password)) {
+                    mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
+                        R.string.fm_extract_failed, Toast.LENGTH_SHORT).show());
+                }
+            } catch (ArchiveSource.PasswordRequiredException | ArchiveSource.WrongPasswordException e) {
+                mArchivePasswords.remove(archive.getAbsolutePath());
+                promptArchivePassword(archive, () -> {
+                    try {
+                        boolean ok = op.run(mArchivePasswords.get(archive.getAbsolutePath()));
+                        mHandler.post(() -> finishArchiveOp(ok));
+                    } catch (IOException ex) {
+                        finishArchiveOp(false);
+                    }
+                });
+            } catch (IOException e) {
+                mHandler.post(() -> finishArchiveOp(false));
+            }
+        });
+    }
+
+    private void finishArchiveOp(boolean ok) {
+        refreshBothPanes();
+        if (!ok) Toast.makeText(this, R.string.fm_extract_failed, Toast.LENGTH_SHORT).show();
     }
 
     private static void sortEntries(List<FileEntry> entries) {
@@ -290,16 +346,14 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void openArchiveEntry(FileEntry entry) {
-        runBackground(() -> {
+        withArchivePassword(entry.archiveHostFile, password -> {
             File cacheDir = new File(getCacheDir(), "fm_open");
-            if (!cacheDir.isDirectory() && !cacheDir.mkdirs()) return;
-            if (!ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, cacheDir, null)) {
-                mHandler.post(() -> Toast.makeText(FileManagerActivity.this,
-                    R.string.fm_extract_failed, Toast.LENGTH_SHORT).show());
-                return;
-            }
+            if (!cacheDir.isDirectory() && !cacheDir.mkdirs()) return false;
+            if (!ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, cacheDir, password))
+                return false;
             File extracted = new File(cacheDir, entry.archiveEntryPath);
             mHandler.post(() -> openFile(extracted));
+            return true;
         });
     }
 
@@ -504,20 +558,12 @@ public class FileManagerActivity extends AppCompatActivity {
         FileEntry entry = targets.get(0);
         File targetDir = paneDiskDirectory(mActivePane);
 
-        runBackground(() -> {
-            boolean ok;
-            if (entry.isArchiveEntry()) {
-                ok = ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, targetDir, null);
-            } else {
-                File destDir = new File(targetDir, baseNameOf(entry.hostFile));
-                ok = ArchiveSource.extractAll(entry.hostFile, destDir, null);
-            }
-            boolean finalOk = ok;
-            mHandler.post(() -> {
-                refreshBothPanes();
-                if (!finalOk)
-                    Toast.makeText(FileManagerActivity.this, R.string.fm_extract_failed, Toast.LENGTH_SHORT).show();
-            });
+        File archive = entry.isArchiveEntry() ? entry.archiveHostFile : entry.hostFile;
+        withArchivePassword(archive, password -> {
+            if (entry.isArchiveEntry())
+                return ArchiveSource.extractEntry(entry.archiveHostFile, entry.archiveEntryPath, targetDir, password);
+            File destDir = new File(targetDir, baseNameOf(entry.hostFile));
+            return ArchiveSource.extractAll(entry.hostFile, destDir, password);
         });
     }
 
@@ -540,15 +586,26 @@ public class FileManagerActivity extends AppCompatActivity {
                 }
                 File destFile = new File(targetDir, name.endsWith(".zip") ? name : name + ".zip");
                 List<File> files = new ArrayList<>(sources);
-                runBackground(() -> {
-                    boolean ok = ArchiveSource.compressZip(files, destFile, null);
-                    mHandler.post(() -> {
-                        refreshBothPanes();
-                        if (!ok)
-                            Toast.makeText(FileManagerActivity.this, R.string.fm_compress_failed, Toast.LENGTH_SHORT).show();
-                    });
-                });
+                promptCompressPassword(files, destFile);
             }, -1, null, -1, null, null);
+    }
+
+    private void promptCompressPassword(List<File> files, File destFile) {
+        TextInputDialogUtils.textInput(this, R.string.fm_compress_password, "",
+            R.string.fm_confirm, text -> startCompress(files, destFile, text.toCharArray()),
+            R.string.fm_no_password, text -> startCompress(files, destFile, null),
+            -1, null, null);
+    }
+
+    private void startCompress(List<File> files, File destFile, char[] password) {
+        runBackground(() -> {
+            boolean ok = ArchiveSource.compressZip(files, destFile, password);
+            mHandler.post(() -> {
+                refreshBothPanes();
+                if (!ok)
+                    Toast.makeText(FileManagerActivity.this, R.string.fm_compress_failed, Toast.LENGTH_SHORT).show();
+            });
+        });
     }
 
     private static String baseNameOf(File archive) {

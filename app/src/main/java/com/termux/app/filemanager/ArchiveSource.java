@@ -107,31 +107,35 @@ public final class ArchiveSource {
     }
 
     /** Extracts one entry (file or directory subtree) into {@code destDir}. */
-    public static boolean extractEntry(File archive, String entryPath, File destDir, char[] password) {
+    public static boolean extractEntry(File archive, String entryPath, File destDir, char[] password)
+        throws IOException {
         String name = archive.getName();
-        try {
-            if (isZip(name)) {
-                ZipFile zipFile = new ZipFile(archive);
-                try {
-                    if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
-                    if (password != null) zipFile.setPassword(password);
-                    for (FileHeader header : zipFile.getFileHeaders()) {
-                        String entryName = normalize(header.getFileName());
-                        if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
-                        if (header.isDirectory()) {
-                            File dir = new File(destDir, entryName);
-                            if (!dir.isDirectory() && !dir.mkdirs()) return false;
-                        } else {
-                            zipFile.extractFile(header, destDir.getAbsolutePath());
-                        }
+        if (isZip(name)) {
+            ZipFile zipFile = new ZipFile(archive);
+            try {
+                if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
+                if (password != null) zipFile.setPassword(password);
+                for (FileHeader header : zipFile.getFileHeaders()) {
+                    String entryName = normalize(header.getFileName());
+                    if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
+                    if (header.isDirectory()) {
+                        File dir = new File(destDir, entryName);
+                        if (!dir.isDirectory() && !dir.mkdirs()) return false;
+                    } else {
+                        zipFile.extractFile(header, destDir.getAbsolutePath());
                     }
-                } catch (net.lingala.zip4j.exception.ZipException e) {
-                    if (isPasswordError(e)) return false;
-                    throw e;
-                } finally {
-                    closeQuietly(zipFile);
                 }
-            } else if (name.toLowerCase(Locale.US).endsWith(".7z")) {
+            } catch (net.lingala.zip4j.exception.ZipException e) {
+                if (isPasswordError(e)) throw new WrongPasswordException(e);
+                return false;
+            } finally {
+                closeQuietly(zipFile);
+            }
+            return true;
+        }
+
+        try {
+            if (name.toLowerCase(Locale.US).endsWith(".7z")) {
                 try (SevenZFile sevenZFile = password != null
                     ? new SevenZFile(archive, password) : new SevenZFile(archive)) {
                     for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
@@ -158,12 +162,16 @@ public final class ArchiveSource {
             }
             return true;
         } catch (IOException e) {
-            return false;
+            if (isPasswordError(e)) {
+                if (password == null) throw new PasswordRequiredException();
+                throw new WrongPasswordException(e);
+            }
+            throw e;
         }
     }
 
     /** Extracts the whole archive into {@code destDir}. */
-    public static boolean extractAll(File archive, File destDir, char[] password) {
+    public static boolean extractAll(File archive, File destDir, char[] password) throws IOException {
         String name = archive.getName().toLowerCase(Locale.US);
         if (name.endsWith(".gz") && !name.endsWith(".tar.gz") && !name.endsWith(".tgz")) {
             return extractBareCompressed(archive, destDir);
@@ -171,11 +179,12 @@ public final class ArchiveSource {
         if (isZip(name)) {
             ZipFile zipFile = new ZipFile(archive);
             try {
-                if (zipFile.isEncrypted() && password == null) return false;
+                if (zipFile.isEncrypted() && password == null) throw new PasswordRequiredException();
                 if (password != null) zipFile.setPassword(password);
                 zipFile.extractAll(destDir.getAbsolutePath());
                 return true;
             } catch (net.lingala.zip4j.exception.ZipException e) {
+                if (isPasswordError(e)) throw new WrongPasswordException(e);
                 return false;
             } finally {
                 closeQuietly(zipFile);

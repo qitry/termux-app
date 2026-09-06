@@ -12,6 +12,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.termux.R;
+import com.termux.shared.theme.NightMode;
+import com.termux.shared.theme.ThemeUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -22,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.github.rosemoe.sora.widget.CodeEditor;
+import io.github.rosemoe.sora.widget.schemes.SchemeDarcula;
 
 public class EditorActivity extends AppCompatActivity {
 
@@ -48,6 +51,8 @@ public class EditorActivity extends AppCompatActivity {
         mEditor = new CodeEditor(this);
         mEditor.setTypefaceText(Typeface.MONOSPACE);
         mEditor.setWordwrap(true);
+        if (ThemeUtils.shouldEnableDarkTheme(this, NightMode.getAppNightMode().getName()))
+            mEditor.setColorScheme(new SchemeDarcula());
         mEditor.setEditorLanguage(new com.termux.app.filemanager.RegexHighlightLanguage());
         ((FrameLayout) findViewById(R.id.editor_container)).addView(mEditor,
             new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));

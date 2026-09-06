@@ -11,7 +11,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.R;
 
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -21,15 +20,15 @@ import java.util.Locale;
 public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.FileViewHolder> {
 
     public interface Callbacks {
-        void onFileClicked(File file);
+        void onFileClicked(FileEntry entry);
 
-        void onFileLongClicked(File file);
+        void onFileLongClicked(FileEntry entry);
 
         void onSelectionChanged(int count);
     }
 
-    private final List<File> mItems = new ArrayList<>();
-    private final List<File> mSelected = new ArrayList<>();
+    private final List<FileEntry> mItems = new ArrayList<>();
+    private final List<FileEntry> mSelected = new ArrayList<>();
     private final Callbacks mCallbacks;
     private boolean mSelectionActive;
 
@@ -39,17 +38,26 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         mCallbacks = callbacks;
     }
 
-    public void setItems(List<File> items) {
+    public void setItems(List<FileEntry> items) {
         mItems.clear();
         mItems.addAll(items);
+        mSelected.retainAll(mItems);
         notifyDataSetChanged();
+    }
+
+    public List<FileEntry> getItems() {
+        return new ArrayList<>(mItems);
+    }
+
+    public int indexOf(FileEntry entry) {
+        return mItems.indexOf(entry);
     }
 
     public boolean isSelectionActive() {
         return mSelectionActive;
     }
 
-    public List<File> getSelected() {
+    public List<FileEntry> getSelected() {
         return new ArrayList<>(mSelected);
     }
 
@@ -57,7 +65,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         return mSelected.size();
     }
 
-    public void startSelection(File initial) {
+    public void startSelection(FileEntry initial) {
         mSelectionActive = true;
         mSelected.clear();
         if (initial != null) mSelected.add(initial);
@@ -80,15 +88,34 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         mCallbacks.onSelectionChanged(mSelected.size());
     }
 
-    public void toggleSelection(File file) {
-        if (mSelected.contains(file)) mSelected.remove(file);
-        else mSelected.add(file);
+    public void toggleSelection(FileEntry entry) {
+        if (mSelected.contains(entry)) mSelected.remove(entry);
+        else mSelected.add(entry);
         if (mSelected.isEmpty()) {
             clearSelection();
         } else {
             notifyDataSetChanged();
             mCallbacks.onSelectionChanged(mSelected.size());
         }
+    }
+
+    /** Select every item between the last-selected anchor and {@code entry}, inclusive. */
+    public void selectRange(FileEntry entry) {
+        if (mSelected.isEmpty()) {
+            startSelection(entry);
+            return;
+        }
+        int anchor = mItems.indexOf(mSelected.get(mSelected.size() - 1));
+        int target = mItems.indexOf(entry);
+        if (anchor < 0 || target < 0) return;
+        int from = Math.min(anchor, target);
+        int to = Math.max(anchor, target);
+        for (int i = from; i <= to; i++) {
+            FileEntry item = mItems.get(i);
+            if (!mSelected.contains(item)) mSelected.add(item);
+        }
+        notifyDataSetChanged();
+        mCallbacks.onSelectionChanged(mSelected.size());
     }
 
     @NonNull
@@ -100,25 +127,26 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
     @Override
     public void onBindViewHolder(@NonNull FileViewHolder holder, int position) {
-        File file = mItems.get(position);
-        boolean isDirectory = file.isDirectory();
+        FileEntry entry = mItems.get(position);
 
-        holder.icon.setImageResource(isDirectory ? R.drawable.ic_fm_folder : R.drawable.ic_fm_file);
-        holder.name.setText(file.getName());
+        holder.icon.setImageResource(FileIcons.getIconRes(entry));
+        if (!entry.isArchiveEntry() && FileIcons.isImage(entry) && entry.hostFile != null)
+            ThumbnailLoader.loadInto(holder.icon, entry.hostFile);
 
-        String size = isDirectory ? "" : FileManagerUtils.humanReadableSize(file.length()) + "  ";
-        holder.meta.setText(size + mDateFormat.format(new Date(file.lastModified())));
+        holder.name.setText(entry.name);
 
-        boolean selected = mSelected.contains(file);
+        String size = entry.isDirectory ? "" : FileManagerUtils.humanReadableSize(entry.size) + "  ";
+        holder.meta.setText(size + mDateFormat.format(new Date(entry.lastModified)));
+
+        boolean selected = mSelected.contains(entry);
         holder.itemView.setBackgroundColor(selected ? 0x40888888 : 0x00000000);
 
         holder.itemView.setOnClickListener(v -> {
-            if (mSelectionActive) toggleSelection(file);
-            else mCallbacks.onFileClicked(file);
+            if (mSelectionActive) toggleSelection(entry);
+            else mCallbacks.onFileClicked(entry);
         });
         holder.itemView.setOnLongClickListener(v -> {
-            if (mSelectionActive) toggleSelection(file);
-            else mCallbacks.onFileLongClicked(file);
+            mCallbacks.onFileLongClicked(entry);
             return true;
         });
     }

@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.termux.R;
+import com.termux.app.filemanager.FileEntry;
 import com.termux.app.filemanager.FileManagerAdapter;
 import com.termux.app.filemanager.FileManagerUtils;
 import com.termux.shared.android.PermissionUtils;
@@ -57,12 +58,12 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private TextView mPathText;
 
-    private final List<File> mClipboard = new ArrayList<>();
+    private final List<FileEntry> mClipboard = new ArrayList<>();
     private boolean mClipboardIsCut;
 
     private ActionMode mActionMode;
 
-    private class FilePane {
+    protected class FilePane {
         View container;
         View indicator;
         RecyclerView listView;
@@ -122,13 +123,13 @@ public class FileManagerActivity extends AppCompatActivity {
         pane.listView.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
         pane.adapter = new FileManagerAdapter(new FileManagerAdapter.Callbacks() {
             @Override
-            public void onFileClicked(File file) {
-                handleFileClicked(pane, file);
+            public void onFileClicked(FileEntry entry) {
+                handleFileClicked(pane, entry);
             }
 
             @Override
-            public void onFileLongClicked(File file) {
-                handleFileLongClicked(pane, file);
+            public void onFileLongClicked(FileEntry entry) {
+                handleFileLongClicked(pane, entry);
             }
 
             @Override
@@ -154,20 +155,21 @@ public class FileManagerActivity extends AppCompatActivity {
         updatePathText();
     }
 
-    private void updatePathText() {
+    protected void updatePathText() {
         if (mActivePane != null)
             mPathText.setText(mActivePane.currentDirectory.getAbsolutePath());
     }
 
-    private void loadPane(FilePane pane, File directory) {
+    protected void loadPane(FilePane pane, File directory) {
         mExecutor.execute(() -> {
             File[] files = directory.listFiles();
-            List<File> entries = files == null ? new ArrayList<>() : new ArrayList<>(Arrays.asList(files));
+            List<FileEntry> entries = new ArrayList<>();
+            if (files != null) {
+                for (File file : files) entries.add(FileEntry.fromFile(file));
+            }
             Collections.sort(entries, (a, b) -> {
-                boolean aDir = a.isDirectory();
-                boolean bDir = b.isDirectory();
-                if (aDir != bDir) return aDir ? -1 : 1;
-                return String.CASE_INSENSITIVE_ORDER.compare(a.getName(), b.getName());
+                if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
+                return String.CASE_INSENSITIVE_ORDER.compare(a.name, b.name);
             });
             mHandler.post(() -> {
                 pane.currentDirectory = directory;
@@ -185,27 +187,27 @@ public class FileManagerActivity extends AppCompatActivity {
         if (parent != null) loadPane(mActivePane, parent);
     }
 
-    private void handleFileClicked(FilePane pane, File file) {
+    private void handleFileClicked(FilePane pane, FileEntry entry) {
         setActivePane(pane);
-        if (file.isDirectory()) loadPane(pane, file);
-        else openFile(file);
+        if (entry.isDirectory) loadPane(pane, entry.hostFile);
+        else openFile(entry.hostFile);
     }
 
-    private void handleFileLongClicked(FilePane pane, File file) {
+    private void handleFileLongClicked(FilePane pane, FileEntry entry) {
         setActivePane(pane);
         if (mActionMode == null)
             mActionMode = startSupportActionMode(new SelectionActionModeCallback());
         mTermuxPane.adapter.clearSelection();
         mAndroidPane.adapter.clearSelection();
-        pane.adapter.startSelection(file);
+        pane.adapter.startSelection(entry);
     }
 
-    private int getSelectedCount() {
+    protected int getSelectedCount() {
         return mTermuxPane.adapter.getSelectedCount() + mAndroidPane.adapter.getSelectedCount();
     }
 
-    private List<File> getSelectedFiles() {
-        List<File> selected = new ArrayList<>(mTermuxPane.adapter.getSelected());
+    protected List<FileEntry> getSelectedEntries() {
+        List<FileEntry> selected = new ArrayList<>(mTermuxPane.adapter.getSelected());
         selected.addAll(mAndroidPane.adapter.getSelected());
         return selected;
     }
@@ -258,16 +260,17 @@ public class FileManagerActivity extends AppCompatActivity {
 
     private void setClipboard(boolean cut) {
         mClipboard.clear();
-        mClipboard.addAll(getSelectedFiles());
+        mClipboard.addAll(getSelectedEntries());
         mClipboardIsCut = cut;
         Toast.makeText(this, cut ? R.string.fm_cut_count : R.string.fm_copied_count,
             Toast.LENGTH_SHORT).show();
     }
 
     private void renameSelected() {
-        List<File> selected = getSelectedFiles();
+        List<FileEntry> selected = getSelectedEntries();
         if (selected.size() != 1) return;
-        File file = selected.get(0);
+        File file = selected.get(0).hostFile;
+        if (file == null) return;
 
         TextInputDialogUtils.textInput(this, R.string.fm_rename, file.getName(),
             R.string.fm_confirm, text -> {
@@ -288,14 +291,17 @@ public class FileManagerActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteSelected() {
-        List<File> selected = getSelectedFiles();
+        List<FileEntry> selected = getSelectedEntries();
         if (selected.isEmpty()) return;
 
         new AlertDialog.Builder(this)
             .setTitle(R.string.fm_delete_confirm_title)
             .setMessage(getString(R.string.fm_delete_confirm_message, selected.size()))
             .setPositiveButton(R.string.fm_delete, (dialog, which) -> {
-                List<File> targets = new ArrayList<>(selected);
+                List<File> targets = new ArrayList<>();
+                for (FileEntry entry : selected) {
+                    if (entry.hostFile != null) targets.add(entry.hostFile);
+                }
                 mExecutor.execute(() -> {
                     boolean failed = false;
                     for (File file : targets) {
@@ -345,40 +351,22 @@ public class FileManagerActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.fm_nothing_to_paste, Toast.LENGTH_SHORT).show();
             return;
         }
-
-        File targetDir = mActivePane.currentDirectory;
-        boolean hasConflict = false;
-        for (File source : mClipboard) {
-            if (new File(targetDir, source.getName()).exists()) {
-                hasConflict = true;
-                break;
-            }
-        }
-
-        if (hasConflict) {
-            new AlertDialog.Builder(this)
-                .setTitle(R.string.fm_conflict_title)
-                .setMessage(R.string.fm_conflict_message)
-                .setPositiveButton(R.string.fm_overwrite, (dialog, which) -> doPaste(targetDir, true))
-                .setNeutralButton(R.string.fm_skip, (dialog, which) -> doPaste(targetDir, false))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-        } else {
-            doPaste(targetDir, true);
-        }
+        doPaste(mActivePane.currentDirectory, true);
     }
 
     private void doPaste(File targetDir, boolean overwrite) {
-        List<File> sources = new ArrayList<>(mClipboard);
+        List<FileEntry> sources = new ArrayList<>(mClipboard);
         boolean cut = mClipboardIsCut;
         mClipboard.clear();
         mClipboardIsCut = false;
 
         mExecutor.execute(() -> {
             boolean failed = false;
-            for (File source : sources) {
-                File destination = new File(targetDir, source.getName());
-                if (destination.getAbsolutePath().equals(source.getAbsolutePath())) continue;
+            for (FileEntry source : sources) {
+                File src = source.hostFile;
+                if (src == null) continue;
+                File destination = new File(targetDir, src.getName());
+                if (destination.getAbsolutePath().equals(src.getAbsolutePath())) continue;
                 if (destination.exists()) {
                     if (!overwrite) continue;
                     if (!FileManagerUtils.deleteRecursive(destination)) {
@@ -386,8 +374,8 @@ public class FileManagerActivity extends AppCompatActivity {
                         continue;
                     }
                 }
-                boolean ok = cut ? FileManagerUtils.move(source, destination)
-                    : FileManagerUtils.copyRecursive(source, destination);
+                boolean ok = cut ? FileManagerUtils.move(src, destination)
+                    : FileManagerUtils.copyRecursive(src, destination);
                 if (!ok) failed = true;
             }
             boolean finalFailed = failed;
@@ -399,7 +387,7 @@ public class FileManagerActivity extends AppCompatActivity {
         });
     }
 
-    private void refreshBothPanes() {
+    protected void refreshBothPanes() {
         loadPane(mTermuxPane, mTermuxPane.currentDirectory);
         loadPane(mAndroidPane, mAndroidPane.currentDirectory);
     }

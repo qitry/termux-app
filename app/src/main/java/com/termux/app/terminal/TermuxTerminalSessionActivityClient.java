@@ -41,8 +41,6 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
     private final TermuxActivity mActivity;
 
-    private static final int MAX_SESSIONS = 8;
-
     private SoundPool mBellSoundPool;
 
     private int mBellSoundId;
@@ -378,30 +376,25 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         TermuxService service = mActivity.getTermuxService();
         if (service == null) return;
 
-        if (service.getTermuxSessionsSize() >= MAX_SESSIONS) {
-            new AlertDialog.Builder(mActivity).setTitle(R.string.title_max_terminals_reached).setMessage(R.string.msg_max_terminals_reached)
-                .setPositiveButton(android.R.string.ok, null).show();
+        TerminalSession currentSession = mActivity.getCurrentSession();
+
+        String workingDirectory;
+        if (currentSession == null) {
+            workingDirectory = mActivity.getProperties().getDefaultWorkingDirectory();
         } else {
-            TerminalSession currentSession = mActivity.getCurrentSession();
-
-            String workingDirectory;
-            if (currentSession == null) {
-                workingDirectory = mActivity.getProperties().getDefaultWorkingDirectory();
-            } else {
-                workingDirectory = currentSession.getCwd();
-            }
-
-            if (TextUtils.isEmpty(sessionName))
-                sessionName = mActivity.getString(R.string.default_session_name);
-
-            TermuxSession newTermuxSession = service.createTermuxSession(null, null, null, workingDirectory, isFailSafe, sessionName);
-            if (newTermuxSession == null) return;
-
-            TerminalSession newTerminalSession = newTermuxSession.getTerminalSession();
-            setCurrentSession(newTerminalSession);
-
-            mActivity.getDrawer().closeDrawers();
+            workingDirectory = currentSession.getCwd();
         }
+
+        if (TextUtils.isEmpty(sessionName))
+            sessionName = mActivity.getString(R.string.default_session_name);
+
+        TermuxSession newTermuxSession = service.createTermuxSession(null, null, null, workingDirectory, isFailSafe, sessionName);
+        if (newTermuxSession == null) return;
+
+        TerminalSession newTerminalSession = newTermuxSession.getTerminalSession();
+        setCurrentSession(newTerminalSession);
+
+        mActivity.getDrawer().closeDrawers();
     }
 
     public void setCurrentStoredSession() {

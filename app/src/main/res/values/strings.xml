@@ -41,8 +41,6 @@
     <string name="drawer_title">Termux Fork</string>
     <string name="action_new_session">新建会话</string>
     <string name="action_new_session_failsafe">安全模式</string>
-    <string name="title_max_terminals_reached">已达最大终端数</string>
-    <string name="msg_max_terminals_reached">请先关闭已有终端再创建新终端。</string>
 
     <string name="title_rename_session">设置会话名称</string>
     <string name="action_rename_session_confirm">设置</string>

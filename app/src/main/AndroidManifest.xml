@@ -126,6 +126,12 @@
             android:label="@string/crash_title"
             android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
 
+        <activity
+            android:name=".app.activities.TermuxForkAboutActivity"
+            android:exported="false"
+            android:label="@string/termux_fork_about_preference_title"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${TERMUX_PACKAGE_NAME}.filemanager"

@@ -1,6 +1,7 @@
 package com.termux.app.activities;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 
@@ -67,6 +68,7 @@ public class SettingsActivity extends AppCompatActivity {
                     configureTermuxFloatPreference(context);
                     configureTermuxTaskerPreference(context);
                     configureTermuxWidgetPreference(context);
+                    configureTermuxForkAboutPreference(context);
                     configureAboutPreference(context);
                     configureDonatePreference(context);
                 }
@@ -106,6 +108,16 @@ public class SettingsActivity extends AppCompatActivity {
                 TermuxWidgetAppSharedPreferences preferences = TermuxWidgetAppSharedPreferences.build(context, false);
                 // If failed to get app preferences, then likely app is not installed, so do not show its preference
                 termuxWidgetPreference.setVisible(preferences != null);
+            }
+        }
+
+        private void configureTermuxForkAboutPreference(@NonNull Context context) {
+            Preference preference = findPreference("termux_fork_about");
+            if (preference != null) {
+                preference.setOnPreferenceClickListener(p -> {
+                    context.startActivity(new Intent(context, TermuxForkAboutActivity.class));
+                    return true;
+                });
             }
         }
 

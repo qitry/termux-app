@@ -35,6 +35,11 @@
         app:fragment="com.termux.app.fragments.settings.TermuxWidgetPreferencesFragment"/>
 
     <Preference
+        app:key="termux_fork_about"
+        app:title="@string/termux_fork_about_preference_title"
+        app:persistent="false"/>
+
+    <Preference
         app:key="about"
         app:title="@string/about_preference_title"
         app:persistent="false"/>

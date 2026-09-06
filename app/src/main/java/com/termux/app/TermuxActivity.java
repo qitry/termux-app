@@ -11,8 +11,6 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.graphics.BlendMode;
 import android.graphics.Color;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.LinearGradient;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
@@ -151,12 +149,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * The expensive blur kernel is created once; the per-slide mask is rebuilt cheaply on each frame.
      */
     private RenderEffect mDrawerBlurEffect;
-
-    /**
-     * Contrast/brightness boost applied to the blurred layer so faint text smears stay visible
-     * through the translucent drawer even on mostly-black terminal screens.
-     */
-    private RenderEffect mDrawerContrastEffect;
 
     /**
      * Unmodified terminal content, composited under the blurred region so the rest stays sharp.
@@ -880,13 +872,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // hides the blurred terminal, making the blur invisible on dark shell screens.
         drawerLayout.setScrimColor(Color.TRANSPARENT);
 
-        mDrawerBlurEffect = RenderEffect.createBlurEffect(40f, 40f, Shader.TileMode.CLAMP);
-        ColorMatrix blurBoost = new ColorMatrix(new float[]{
-            1.8f, 0f, 0f, 0f, 0f,
-            0f, 1.8f, 0f, 0f, 0f,
-            0f, 0f, 1.8f, 0f, 0f,
-            0f, 0f, 0f, 1f, 0f});
-        mDrawerContrastEffect = RenderEffect.createColorFilterEffect(new ColorMatrixColorFilter(blurBoost));
+        mDrawerBlurEffect = RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP);
         mDrawerOriginalEffect = RenderEffect.createOffsetEffect(0f, 0f);
 
         View leftDrawer = findViewById(R.id.left_drawer);
@@ -946,9 +932,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
             new float[]{0f, edge / total, 1f}, Shader.TileMode.CLAMP);
 
-        RenderEffect blurBoost = RenderEffect.createChainEffect(mDrawerContrastEffect, mDrawerBlurEffect);
         RenderEffect blurred = RenderEffect.createBlendModeEffect(
-            blurBoost, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
+            mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
         mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(
             mDrawerOriginalEffect, blurred, BlendMode.SRC_OVER));
         // setRenderEffect alone does not force the RenderNode to re-record its display list, so

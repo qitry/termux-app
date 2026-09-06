@@ -43,7 +43,7 @@ public final class ArchiveSource {
             }
         } else if (name.endsWith(".7z")) {
             try (SevenZFile sevenZFile = new SevenZFile(archive)) {
-                for (SevenZArchiveEntry entry : sevenZFile.getRecords()) {
+                for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
                     collect(children, archive, entry.getName(), entry.isDirectory(),
                         entry.getSize(), entry.getLastModifiedDate().getTime(), prefix);
                 }
@@ -88,7 +88,7 @@ public final class ArchiveSource {
                 }
             } else if (name.endsWith(".7z")) {
                 try (SevenZFile sevenZFile = new SevenZFile(archive)) {
-                    for (SevenZArchiveEntry entry : sevenZFile.getRecords()) {
+                    for (SevenZArchiveEntry entry : sevenZFile.getEntries()) {
                         String entryName = normalize(entry.getName());
                         if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
                         writeExtracted(archive, sevenZFile.getInputStream(entry), entryName, entry.isDirectory(), destDir);

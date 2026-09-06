@@ -556,8 +556,8 @@ public class FileManagerActivity extends AppCompatActivity {
             .show();
     }
 
-    private static void addOp(List<String> labels, List<Integer> icons, List<Runnable> actions,
-                              int labelRes, int iconRes, Runnable action) {
+    private void addOp(List<String> labels, List<Integer> icons, List<Runnable> actions,
+                       int labelRes, int iconRes, Runnable action) {
         labels.add(getString(labelRes));
         icons.add(iconRes);
         actions.add(action);

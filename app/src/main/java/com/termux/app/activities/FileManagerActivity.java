@@ -9,9 +9,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,6 +23,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.view.ActionMode;
 import androidx.appcompat.widget.PopupMenu;
+import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.ItemTouchHelper;
@@ -213,6 +217,14 @@ public class FileManagerActivity extends AppCompatActivity {
             public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
                 FileEntry entry = pane.adapter.getEntryAt(viewHolder.getBindingAdapterPosition());
                 if (entry != null) handleSwipeSelected(pane, entry);
+            }
+
+            @Override
+            public void onChildDraw(@NonNull android.graphics.Canvas c, @NonNull RecyclerView recyclerView,
+                                    @NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
+                                    int actionState, boolean isCurrentlyActive) {
+                // Keep the row visually in place: selection must not drag the file name off screen.
+                super.onChildDraw(c, recyclerView, viewHolder, 0f, 0f, actionState, isCurrentlyActive);
             }
         });
         touchHelper.attachToRecyclerView(pane.listView);
@@ -481,33 +493,25 @@ public class FileManagerActivity extends AppCompatActivity {
         if (targets.isEmpty()) return;
 
         final List<String> labels = new ArrayList<>();
+        final List<Integer> icons = new ArrayList<>();
         final List<Runnable> actions = new ArrayList<>();
         boolean single = targets.size() == 1;
         FileEntry entry = single ? targets.get(0) : null;
 
         if (single && entry.isArchiveEntry()) {
-            labels.add(getString(R.string.fm_extract));
-            actions.add(() -> extractEntries(targets));
-            labels.add(getString(R.string.fm_open_with));
-            actions.add(() -> openArchiveEntry(entry));
+            addOp(labels, icons, actions, R.string.fm_extract, R.drawable.ic_fm_extract, () -> extractEntries(targets));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openArchiveEntry(entry));
         } else if (single && !entry.isDirectory && FileIcons.isArchiveName(entry.name)) {
-            labels.add(getString(R.string.fm_extract));
-            actions.add(() -> extractEntries(targets));
-            labels.add(getString(R.string.fm_open_with));
-            actions.add(() -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_extract, R.drawable.ic_fm_extract, () -> extractEntries(targets));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
         } else if (single && FileIcons.isImage(entry)) {
-            labels.add(getString(R.string.fm_view_image));
-            actions.add(() -> launchViewer(entry.hostFile));
-            labels.add(getString(R.string.fm_open_with));
-            actions.add(() -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_view_image, R.drawable.ic_fm_image, () -> launchViewer(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
         } else if (single && FileIcons.isEditable(entry) && entry.hostFile != null && entry.size <= MAX_EDITABLE_SIZE) {
-            labels.add(getString(R.string.fm_edit));
-            actions.add(() -> launchEditor(entry.hostFile));
-            labels.add(getString(R.string.fm_open_with));
-            actions.add(() -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_edit, R.drawable.ic_fm_code, () -> launchEditor(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
         } else if (single && !entry.isDirectory) {
-            labels.add(getString(R.string.fm_open_with));
-            actions.add(() -> openFile(entry.hostFile));
+            addOp(labels, icons, actions, R.string.fm_open_with, R.drawable.ic_fm_open, () -> openFile(entry.hostFile));
         }
 
         boolean allReal = true;
@@ -516,24 +520,83 @@ public class FileManagerActivity extends AppCompatActivity {
         }
 
         if (single && !entry.isArchiveEntry()) {
-            labels.add(getString(R.string.fm_rename));
-            actions.add(() -> renameEntries(targets));
+            addOp(labels, icons, actions, R.string.fm_rename, R.drawable.ic_fm_edit, () -> renameEntries(targets));
         }
         if (allReal) {
-            labels.add(getString(R.string.fm_compress));
-            actions.add(() -> promptCompress(targets));
-            labels.add(getString(R.string.fm_move));
-            actions.add(() -> pickTargetAndTransfer(targets, true));
-            labels.add(getString(R.string.fm_copy));
-            actions.add(() -> pickTargetAndTransfer(targets, false));
-            labels.add(getString(R.string.fm_delete));
-            actions.add(() -> confirmDelete(targets));
+            addOp(labels, icons, actions, R.string.fm_compress, R.drawable.ic_fm_archive, () -> promptCompress(targets));
+            addOp(labels, icons, actions, R.string.fm_move, R.drawable.ic_fm_move, () -> pickTargetAndTransfer(targets, true));
+            addOp(labels, icons, actions, R.string.fm_copy, R.drawable.ic_fm_copy, () -> pickTargetAndTransfer(targets, false));
+            addOp(labels, icons, actions, R.string.fm_delete, R.drawable.ic_fm_delete, () -> confirmDelete(targets));
         }
 
-        new AlertDialog.Builder(this)
+        final AlertDialog[] dialogHolder = new AlertDialog[1];
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        float density = getResources().getDisplayMetrics().density;
+        int padding = Math.round(8 * density);
+        grid.setPadding(padding, padding, padding, padding);
+
+        for (int i = 0; i < labels.size(); i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.addView(buildOpCell(labels.get(i), icons.get(i), dialogHolder, actions.get(i)),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            if (i + 1 < labels.size())
+                row.addView(buildOpCell(labels.get(i + 1), icons.get(i + 1), dialogHolder, actions.get(i + 1)),
+                    new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            else
+                row.addView(new View(this), new LinearLayout.LayoutParams(0, 0, 1f));
+            grid.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+
+        dialogHolder[0] = new AlertDialog.Builder(this)
             .setTitle(single ? entry.name : getString(R.string.fm_selected_count, targets.size()))
-            .setItems(labels.toArray(new CharSequence[0]), (dialog, which) -> actions.get(which).run())
+            .setView(grid)
             .show();
+    }
+
+    private static void addOp(List<String> labels, List<Integer> icons, List<Runnable> actions,
+                              int labelRes, int iconRes, Runnable action) {
+        labels.add(getString(labelRes));
+        icons.add(iconRes);
+        actions.add(action);
+    }
+
+    private View buildOpCell(String label, int iconRes, AlertDialog[] dialogHolder, Runnable action) {
+        float density = getResources().getDisplayMetrics().density;
+
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setGravity(android.view.Gravity.CENTER);
+        cell.setPadding(Math.round(12 * density), Math.round(12 * density),
+            Math.round(12 * density), Math.round(12 * density));
+        TypedValue outValue = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+        cell.setBackgroundResource(outValue.resourceId);
+        cell.setOnClickListener(v -> {
+            if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+            action.run();
+        });
+
+        ImageView icon = new ImageView(this);
+        icon.setImageDrawable(ContextCompat.getDrawable(this, iconRes));
+        TypedValue tintValue = new TypedValue();
+        getTheme().resolveAttribute(androidx.appcompat.R.attr.colorControlNormal, tintValue, true);
+        icon.setColorFilter(tintValue.data);
+        cell.addView(icon, new LinearLayout.LayoutParams(Math.round(24 * density), Math.round(24 * density)));
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(13);
+        text.setGravity(android.view.Gravity.CENTER);
+        TypedValue textColorValue = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.textColorPrimary, textColorValue, true);
+        if (textColorValue.resourceId != 0)
+            text.setTextColor(getColorStateList(textColorValue.resourceId));
+        cell.addView(text);
+
+        return cell;
     }
 
     private void pickTargetAndTransfer(List<FileEntry> targets, boolean move) {

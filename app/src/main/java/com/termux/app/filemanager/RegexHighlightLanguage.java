@@ -79,8 +79,8 @@ public class RegexHighlightLanguage extends EmptyLanguage {
         private static int colorFor(String token) {
             char first = token.charAt(0);
             if (first == '/' || first == '#') return EditorColorScheme.COMMENT;
-            if (first == '"' || first == '\'') return EditorColorScheme.STRING;
-            if (Character.isDigit(first)) return EditorColorScheme.NUMBER;
+            if (first == '"' || first == '\'') return EditorColorScheme.LITERAL;
+            if (Character.isDigit(first)) return EditorColorScheme.LITERAL;
             return EditorColorScheme.KEYWORD;
         }
     }

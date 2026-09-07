@@ -1,7 +1,6 @@
 package com.termux.app.fragments.settings.termux;
 
 import android.content.Context;
-import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -12,8 +11,6 @@ import androidx.preference.PreferenceManager;
 
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
-import com.termux.shared.termux.settings.properties.TermuxAppSharedProperties;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -25,6 +22,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 @Keep
 public class PropertiesPreferencesFragment extends PreferenceFragmentCompat {
@@ -59,9 +57,23 @@ class TermuxPropertiesDataStore extends PreferenceDataStore {
         return mInstance;
     }
 
+    /**
+     * Read the raw properties files directly instead of the parsed in-memory properties:
+     * TermuxSharedProperties replaces some keys during parsing (e.g. use-black-ui),
+     * which would make switches snap back to off after saving.
+     */
     @Override
     public String getString(String key, String defValue) {
-        String value = TermuxAppSharedProperties.getProperties().getPropertyValue(key, null, false);
+        if (key == null) return defValue;
+        Properties merged = new Properties();
+        for (String path : TermuxConstants.TERMUX_PROPERTIES_FILE_PATHS_LIST) {
+            File file = new File(path);
+            if (!file.isFile()) continue;
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                merged.load(reader);
+            } catch (IOException ignored) { }
+        }
+        String value = merged.getProperty(key);
         return value != null ? value : defValue;
     }
 
@@ -69,46 +81,29 @@ class TermuxPropertiesDataStore extends PreferenceDataStore {
     public void putString(String key, String value) {
         if (key == null) return;
         if (value == null || value.trim().isEmpty()) return;
-        writeAndReload(key, value.trim());
+        writeProperty(key, value.trim());
     }
 
     @Override
     public boolean getBoolean(String key, boolean defValue) {
         String value = getString(key, null);
         if (value == null) return defValue;
-        return "true".equalsIgnoreCase(value);
+        return "true".equalsIgnoreCase(value.trim());
     }
 
     @Override
     public void putBoolean(String key, boolean value) {
         if (key == null) return;
-        writeAndReload(key, String.valueOf(value));
+        writeProperty(key, String.valueOf(value));
     }
 
-    private void writeAndReload(String key, String value) {
-        try {
-            writeProperty(key, value);
-        } catch (IOException e) {
+    private void writeProperty(String key, String value) {
+        File file = new File(TermuxConstants.TERMUX_PROPERTIES_PRIMARY_FILE_PATH);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
             Toast.makeText(mContext, R.string.termux_properties_save_failed, Toast.LENGTH_SHORT).show();
             return;
         }
-
-        TermuxAppSharedProperties.getProperties().loadTermuxPropertiesFromDisk();
-
-        Intent intent = new Intent(TERMUX_ACTIVITY.ACTION_RELOAD_STYLE);
-        intent.putExtra(TERMUX_ACTIVITY.EXTRA_RECREATE_ACTIVITY, true);
-        intent.setPackage(mContext.getPackageName());
-        mContext.sendBroadcast(intent);
-
-        Toast.makeText(mContext, R.string.termux_properties_saved, Toast.LENGTH_SHORT).show();
-    }
-
-    /** Updates or appends {@code key=value} in the primary termux.properties, preserving comments. */
-    private static void writeProperty(String key, String value) throws IOException {
-        File file = new File(TermuxConstants.TERMUX_PROPERTIES_PRIMARY_FILE_PATH);
-        File parent = file.getParentFile();
-        if (parent != null && !parent.isDirectory() && !parent.mkdirs())
-            throw new IOException("cannot create " + parent);
 
         List<String> lines = new ArrayList<>();
         boolean found = false;
@@ -120,10 +115,17 @@ class TermuxPropertiesDataStore extends PreferenceDataStore {
                     if (!trimmed.startsWith("#") && trimmed.startsWith(key + "=")) {
                         lines.add(key + "=" + value);
                         found = true;
+                    } else if (!trimmed.startsWith("#") && trimmed.startsWith(key + " ")) {
+                        // "key = value" style
+                        lines.add(key + "=" + value);
+                        found = true;
                     } else {
                         lines.add(line);
                     }
                 }
+            } catch (IOException e) {
+                Toast.makeText(mContext, R.string.termux_properties_save_failed, Toast.LENGTH_SHORT).show();
+                return;
             }
         }
         if (!found) {
@@ -136,6 +138,11 @@ class TermuxPropertiesDataStore extends PreferenceDataStore {
                 writer.write(line);
                 writer.write('\n');
             }
+        } catch (IOException e) {
+            Toast.makeText(mContext, R.string.termux_properties_save_failed, Toast.LENGTH_SHORT).show();
+            return;
         }
+
+        Toast.makeText(mContext, R.string.termux_properties_saved, Toast.LENGTH_SHORT).show();
     }
 }

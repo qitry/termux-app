@@ -90,8 +90,6 @@ public class FileManagerActivity extends AppCompatActivity {
         /** Non-null while showing search results instead of a directory listing. */
         String searchQuery;
         final Deque<PaneLocation> history = new ArrayDeque<>();
-        /** SharedPreferences key under which this pane's location is remembered. */
-        String prefsKey;
     }
 
     private static class PaneLocation {
@@ -126,8 +124,8 @@ public class FileManagerActivity extends AppCompatActivity {
 
         setActivePane(mTermuxPane);
 
-        restorePane(mTermuxPane, "pane_termux");
-        restorePane(mAndroidPane, "pane_android");
+        loadPane(mTermuxPane, mTermuxPane.rootDirectory);
+        loadPane(mAndroidPane, mAndroidPane.rootDirectory);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             && !PermissionUtils.checkPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
@@ -161,36 +159,6 @@ public class FileManagerActivity extends AppCompatActivity {
                     R.string.fm_operation_failed, Toast.LENGTH_SHORT).show());
             }
         });
-    }
-
-    private void restorePane(FilePane pane, String key) {
-        pane.prefsKey = key;
-        String saved = getSharedPreferences("file_manager", MODE_PRIVATE).getString(key, null);
-        if (saved != null) {
-            int sep = saved.indexOf('|');
-            if (sep >= 0) {
-                File archive = new File(saved.substring(0, sep));
-                if (archive.isFile()) {
-                    loadArchivePane(pane, archive, saved.substring(sep + 1));
-                    return;
-                }
-            } else {
-                File directory = new File(saved);
-                if (directory.isDirectory()) {
-                    loadPane(pane, directory);
-                    return;
-                }
-            }
-        }
-        loadPane(pane, pane.rootDirectory);
-    }
-
-    private void persistPane(FilePane pane) {
-        if (pane.prefsKey == null || pane.searchQuery != null) return;
-        String value = pane.archiveContext != null
-            ? pane.archiveContext.getAbsolutePath() + "|" + pane.archivePrefix
-            : pane.currentDirectory.getAbsolutePath();
-        getSharedPreferences("file_manager", MODE_PRIVATE).edit().putString(pane.prefsKey, value).apply();
     }
 
     private void setupPane(FilePane pane, int containerId, int indicatorId, int listId, File root) {
@@ -309,7 +277,6 @@ public class FileManagerActivity extends AppCompatActivity {
                 pane.searchQuery = null;
                 applyEntries(pane, entries);
                 if (pane == mActivePane) updatePathText();
-                persistPane(pane);
             });
         });
     }
@@ -340,7 +307,6 @@ public class FileManagerActivity extends AppCompatActivity {
             pane.searchQuery = null;
             applyEntries(pane, entries);
             if (pane == mActivePane) updatePathText();
-            persistPane(pane);
         });
     }
 
@@ -391,7 +357,7 @@ public class FileManagerActivity extends AppCompatActivity {
         if (!pane.history.isEmpty())
             display.add(FileEntry.special(getString(R.string.fm_back_to_previous), FileEntry.SPECIAL_BACK));
         if (canGoUp(pane))
-            display.add(FileEntry.special("..", FileEntry.SPECIAL_PARENT));
+            display.add(FileEntry.special(getString(R.string.fm_parent_directory), FileEntry.SPECIAL_PARENT));
         display.addAll(entries);
         pane.adapter.setItems(display);
     }
@@ -548,7 +514,7 @@ public class FileManagerActivity extends AppCompatActivity {
 
         final AlertDialog[] holder = new AlertDialog[1];
         holder[0] = new AlertDialog.Builder(this)
-            .setTitle(R.string.fm_open_with)
+            .setTitle(R.string.fm_open_with_title)
             .setItems(items.toArray(new CharSequence[0]), (dialog, which) -> {
                 String mode = modes[which];
                 if (archiveEntry) {
@@ -558,7 +524,6 @@ public class FileManagerActivity extends AppCompatActivity {
                     openWithMode(entry, mode);
                 }
             })
-            .setMessage(R.string.fm_open_with_hint)
             .create();
         holder[0].show();
         holder[0].getListView().setOnItemLongClickListener((parent, view, position, id) -> {

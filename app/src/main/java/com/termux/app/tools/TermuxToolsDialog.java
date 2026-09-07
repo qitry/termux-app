@@ -1,12 +1,6 @@
 package com.termux.app.tools;
 
 import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
-import android.text.method.ScrollingMovementMethod;
-import android.widget.ScrollView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.termux.R;
@@ -15,19 +9,14 @@ import com.termux.app.TermuxService;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Wrench dialog in the navigation drawer: quick access to termux-api / termux-tools
- * utilities. Long-running interactive tools (change-repo, pkg install) open in a
- * terminal session; one-shot commands run in the background and show their output.
+ * utilities. Every tool runs as a command in a fresh terminal session, so output and
+ * interactive prompts are visible in the terminal itself.
  */
 public final class TermuxToolsDialog {
 
@@ -45,32 +34,36 @@ public final class TermuxToolsDialog {
 
         if (!hasInfo || !hasRepo || !hasBattery || !hasStorage || !hasWake) {
             labels.add(activity.getString(R.string.tools_install));
-            actions.add(() -> runInTerminal(activity, BIN + "/bash",
-                new String[]{"-lc", "pkg install -y termux-api termux-tools"},
+            actions.add(() -> runInTerminal(activity, "pkg install -y termux-api termux-tools",
                 activity.getString(R.string.tools_install_session_name)));
         }
 
         if (hasInfo) {
             labels.add(activity.getString(R.string.tools_system_info));
-            actions.add(() -> runOutput(activity, "termux-info", "--no-set-clipboard"));
+            actions.add(() -> runInTerminal(activity, "termux-info --no-set-clipboard",
+                activity.getString(R.string.tools_system_info)));
         }
         if (hasBattery) {
             labels.add(activity.getString(R.string.tools_battery));
-            actions.add(() -> runOutput(activity, "termux-battery-status"));
+            actions.add(() -> runInTerminal(activity, "termux-battery-status",
+                activity.getString(R.string.tools_battery)));
         }
         if (hasWake) {
             labels.add(activity.getString(R.string.tools_wake_lock));
-            actions.add(() -> runSimple(activity, "termux-wake-lock", R.string.tools_wake_lock_ok));
+            actions.add(() -> runInTerminal(activity, "termux-wake-lock",
+                activity.getString(R.string.tools_wake_lock)));
             labels.add(activity.getString(R.string.tools_wake_unlock));
-            actions.add(() -> runSimple(activity, "termux-wake-unlock", R.string.tools_wake_unlock_ok));
+            actions.add(() -> runInTerminal(activity, "termux-wake-unlock",
+                activity.getString(R.string.tools_wake_unlock)));
         }
         if (hasStorage) {
             labels.add(activity.getString(R.string.tools_storage_setup));
-            actions.add(() -> runSimple(activity, "termux-setup-storage", R.string.tools_storage_setup_hint));
+            actions.add(() -> runInTerminal(activity, "termux-setup-storage",
+                activity.getString(R.string.tools_storage_setup)));
         }
         if (hasRepo) {
             labels.add(activity.getString(R.string.tools_change_repo));
-            actions.add(() -> runInTerminal(activity, BIN + "/termux-change-repo", null,
+            actions.add(() -> runInTerminal(activity, "termux-change-repo",
                 activity.getString(R.string.tools_change_repo)));
         }
 
@@ -80,97 +73,20 @@ public final class TermuxToolsDialog {
             .show();
     }
 
-    /** Runs a one-shot command in the background and shows its output in a scrollable dialog. */
-    private static void runOutput(final TermuxActivity activity, String... command) {
-        Toast.makeText(activity, R.string.tools_running, Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            String output;
-            try {
-                output = exec(command);
-            } catch (Exception e) {
-                output = null;
-            }
-            final String result = output;
-            activity.runOnUiThread(() -> {
-                if (result == null || result.trim().isEmpty()) {
-                    Toast.makeText(activity, R.string.tools_exec_failed, Toast.LENGTH_LONG).show();
-                    return;
-                }
-                showOutputDialog(activity, result);
-            });
-        }).start();
-    }
-
-    private static void showOutputDialog(Context context, String output) {
-        TextView textView = new TextView(context);
-        textView.setTextIsSelectable(true);
-        textView.setPadding(32, 16, 32, 16);
-        textView.setText(output);
-
-        ScrollView scrollView = new ScrollView(context);
-        scrollView.addView(textView);
-
-        new AlertDialog.Builder(context)
-            .setTitle(R.string.tools_result)
-            .setView(scrollView)
-            .setPositiveButton(android.R.string.ok, null)
-            .setNeutralButton(R.string.tools_copy, (dialog, which) -> {
-                ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText("termux-tools", output));
-            })
-            .show();
-    }
-
-    /** Runs a command and only reports success/failure via toast. */
-    private static void runSimple(final TermuxActivity activity, String command, final int successMessageRes) {
-        new Thread(() -> {
-            boolean ok;
-            try {
-                exec(command);
-                ok = true;
-            } catch (Exception e) {
-                ok = false;
-            }
-            final boolean result = ok;
-            activity.runOnUiThread(() -> Toast.makeText(activity,
-                result ? successMessageRes : R.string.tools_exec_failed, Toast.LENGTH_LONG).show());
-        }).start();
-    }
-
-    private static String exec(String... command) throws Exception {
-        ProcessBuilder builder = new ProcessBuilder(command);
-        builder.directory(new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
-        Map<String, String> env = builder.environment();
-        env.put("PATH", BIN + ":" + System.getenv("PATH"));
-        env.put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
-        env.put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
-        env.put("TERMUX_APP_PACKAGE", TermuxConstants.TERMUX_PACKAGE_NAME);
-        env.put("TERMUX_API_APP_PACKAGE", TermuxConstants.TERMUX_API_PACKAGE_NAME);
-        builder.redirectErrorStream(true);
-
-        Process process = builder.start();
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) output.append(line).append('\n');
-        }
-        if (!process.waitFor(30, TimeUnit.SECONDS)) {
-            process.destroy();
-            throw new Exception("timeout");
-        }
-        if (process.exitValue() != 0)
-            throw new Exception("exit " + process.exitValue() + ": " + output);
-        return output.toString();
-    }
-
-    /** Starts a visible terminal session running the given command. */
-    private static void runInTerminal(TermuxActivity activity, String executable, String[] arguments, String name) {
+    /** Runs the given shell command in a fresh visible terminal session. */
+    private static void runInTerminal(TermuxActivity activity, String command, String sessionName) {
         TermuxService service = activity.getTermuxService();
-        if (service == null) return;
-        TermuxSession session = service.createTermuxSession(executable, arguments, null,
-            TermuxConstants.TERMUX_HOME_DIR_PATH, false, name);
-        if (session == null) return;
+        if (service == null) {
+            Toast.makeText(activity, R.string.tools_exec_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        TermuxSession session = service.createTermuxSession(BIN + "/bash",
+            new String[]{"-lc", command}, null,
+            TermuxConstants.TERMUX_HOME_DIR_PATH, false, sessionName);
+        if (session == null) {
+            Toast.makeText(activity, R.string.tools_exec_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
         activity.getTermuxTerminalSessionClient().setCurrentSession(session.getTerminalSession());
         activity.getDrawer().closeDrawers();
     }

@@ -136,6 +136,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
         if (entry.isSpecial()) {
             holder.name.setText(entry.name);
+            holder.name.setTextSize(12);
             holder.meta.setText("");
             if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) {
                 holder.icon.setVisibility(View.INVISIBLE);
@@ -156,6 +157,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
         holder.icon.setVisibility(View.VISIBLE);
         holder.name.setTextColor(holder.originalTextColor);
+        holder.name.setTextSize(14);
         holder.icon.setImageResource(FileIcons.getIconRes(entry));
         if (!entry.isArchiveEntry() && FileIcons.isImage(entry) && entry.hostFile != null)
             ThumbnailLoader.loadInto(holder.icon, entry.hostFile);

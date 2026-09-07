@@ -49,8 +49,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@color/drawer_header_background"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
                     <ImageButton
                         android:id="@+id/settings_button"
                         android:layout_width="40dp"
@@ -77,12 +82,11 @@
                         android:background="@null"
                         android:contentDescription="@string/action_open_tools"
                         app:tint="?attr/termuxActivityDrawerImageTint" />
+                    </LinearLayout>
 
                     <TextView
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="4dp"
                         android:layout_marginEnd="4dp"
                         android:gravity="end"
                         android:text="@string/drawer_title"

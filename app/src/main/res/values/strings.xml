@@ -120,12 +120,13 @@
     <string name="fm_mode_editor">内置编辑器</string>
     <string name="fm_mode_viewer">内置图片查看</string>
     <string name="fm_mode_archive">内置压缩包浏览</string>
-    <string name="fm_open_with_hint">长按内置方式可设为该后缀的默认打开方式</string>
     <string name="fm_default_set">已将 %1$s 默认设为「%2$s」</string>
     <string name="fm_mode_unsupported_in_archive">压缩包内仅支持系统打开</string>
     <string name="fm_searching_now">搜索中…</string>
     <string name="fm_no_results">无匹配项</string>
     <string name="fm_back_to_previous">← 返回上一页</string>
+    <string name="fm_parent_directory">↑ 返回上级目录</string>
+    <string name="fm_open_with_title">打开方式（长按设为默认）</string>
 
     <!-- 侧栏工具弹窗 -->
     <string name="action_open_tools">工具</string>
@@ -137,14 +138,8 @@
     <string name="tools_wake_lock">唤醒锁</string>
     <string name="tools_wake_unlock">解除唤醒锁</string>
     <string name="tools_storage_setup">存储设置</string>
-    <string name="tools_storage_setup_hint">已请求存储权限</string>
     <string name="tools_change_repo">更换镜像源</string>
-    <string name="tools_running">执行中…</string>
-    <string name="tools_result">执行结果</string>
-    <string name="tools_copy">复制</string>
     <string name="tools_exec_failed">执行失败，请确认已安装 termux-api 及 Termux:API 伴侣应用</string>
-    <string name="tools_wake_lock_ok">已获取唤醒锁</string>
-    <string name="tools_wake_unlock_ok">已释放唤醒锁</string>
 
     <!-- 高级设置（termux.properties） -->
     <string name="termux_properties_preferences_title">高级设置（termux.properties）</string>
@@ -159,7 +154,7 @@
     <string name="termux_properties_bell_title">铃声行为</string>
     <string name="termux_properties_extra_keys_title">附加按键样式</string>
     <string name="termux_properties_working_dir_title">默认工作目录</string>
-    <string name="termux_properties_saved">已保存并刷新终端</string>
+    <string name="termux_properties_saved">已保存，重启 Termux 后生效</string>
     <string name="termux_properties_save_failed">写入 termux.properties 失败</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>

@@ -69,6 +69,15 @@
                         android:contentDescription="@string/action_open_file_manager"
                         app:tint="?attr/termuxActivityDrawerImageTint" />
 
+                    <ImageButton
+                        android:id="@+id/wrench_button"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:src="@drawable/ic_fm_wrench"
+                        android:background="@null"
+                        android:contentDescription="@string/action_open_tools"
+                        app:tint="?attr/termuxActivityDrawerImageTint" />
+
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"

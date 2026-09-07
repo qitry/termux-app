@@ -43,6 +43,7 @@ import com.termux.app.activities.FileManagerActivity;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
 import com.termux.app.crash.CrashReportLauncher;
+import com.termux.app.tools.TermuxToolsDialog;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
@@ -249,6 +250,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setSettingsButtonView();
 
         setFileManagerButtonView();
+
+        setWrenchButtonView();
 
         setNewSessionButtonView();
 
@@ -570,6 +573,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ImageButton settingsButton = findViewById(R.id.settings_button);
         settingsButton.setOnClickListener(v -> {
             ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
+        });
+    }
+
+    private void setWrenchButtonView() {
+        ImageButton wrenchButton = findViewById(R.id.wrench_button);
+        wrenchButton.setOnClickListener(v -> {
+            getDrawer().closeDrawers();
+            TermuxToolsDialog.show(this);
         });
     }
 

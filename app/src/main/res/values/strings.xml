@@ -126,6 +126,25 @@
     <string name="fm_searching_now">搜索中…</string>
     <string name="fm_no_results">无匹配项</string>
     <string name="fm_back_to_previous">← 返回上一页</string>
+
+    <!-- 侧栏工具弹窗 -->
+    <string name="action_open_tools">工具</string>
+    <string name="tools_title">Termux 工具</string>
+    <string name="tools_install">安装 termux-api / termux-tools</string>
+    <string name="tools_install_session_name">安装工具包</string>
+    <string name="tools_system_info">系统信息</string>
+    <string name="tools_battery">电池状态</string>
+    <string name="tools_wake_lock">唤醒锁</string>
+    <string name="tools_wake_unlock">解除唤醒锁</string>
+    <string name="tools_storage_setup">存储设置</string>
+    <string name="tools_storage_setup_hint">已请求存储权限</string>
+    <string name="tools_change_repo">更换镜像源</string>
+    <string name="tools_running">执行中…</string>
+    <string name="tools_result">执行结果</string>
+    <string name="tools_copy">复制</string>
+    <string name="tools_exec_failed">执行失败，请确认已安装 termux-api 及 Termux:API 伴侣应用</string>
+    <string name="tools_wake_lock_ok">已获取唤醒锁</string>
+    <string name="tools_wake_unlock_ok">已释放唤醒锁</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

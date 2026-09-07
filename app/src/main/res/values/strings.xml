@@ -145,6 +145,22 @@
     <string name="tools_exec_failed">执行失败，请确认已安装 termux-api 及 Termux:API 伴侣应用</string>
     <string name="tools_wake_lock_ok">已获取唤醒锁</string>
     <string name="tools_wake_unlock_ok">已释放唤醒锁</string>
+
+    <!-- 高级设置（termux.properties） -->
+    <string name="termux_properties_preferences_title">高级设置（termux.properties）</string>
+    <string name="termux_properties_preferences_summary">直接编辑 termux.properties 中的常用配置，修改后自动刷新终端</string>
+    <string name="termux_properties_fullscreen_title">全屏模式</string>
+    <string name="termux_properties_fullscreen_summary">隐藏状态栏与导航栏</string>
+    <string name="termux_properties_black_ui_title">纯黑背景</string>
+    <string name="termux_properties_fullscreen_workaround_title">全屏兼容模式</string>
+    <string name="termux_properties_cursor_blink_title">光标闪烁间隔（毫秒）</string>
+    <string name="termux_properties_cursor_blink_summary">0 表示关闭闪烁</string>
+    <string name="termux_properties_cursor_style_title">光标样式</string>
+    <string name="termux_properties_bell_title">铃声行为</string>
+    <string name="termux_properties_extra_keys_title">附加按键样式</string>
+    <string name="termux_properties_working_dir_title">默认工作目录</string>
+    <string name="termux_properties_saved">已保存并刷新终端</string>
+    <string name="termux_properties_save_failed">写入 termux.properties 失败</string>
     <string name="fm_open_with">打开方式</string>
     <string name="fm_view_image">查看图片</string>
     <string name="fm_edit">编辑</string>

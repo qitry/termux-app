@@ -1,0 +1,56 @@
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        app:key="fullscreen"
+        app:title="@string/termux_properties_fullscreen_title"
+        app:summary="@string/termux_properties_fullscreen_summary"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        app:key="use-black-ui"
+        app:title="@string/termux_properties_black_ui_title"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreferenceCompat
+        app:key="use-fullscreen-workaround"
+        app:title="@string/termux_properties_fullscreen_workaround_title"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        app:key="terminal-cursor-blink-rate"
+        app:title="@string/termux_properties_cursor_blink_title"
+        app:summary="@string/termux_properties_cursor_blink_summary"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        app:key="terminal-cursor-style"
+        app:title="@string/termux_properties_cursor_style_title"
+        app:entries="@array/termux_properties_cursor_style_entries"
+        app:entryValues="@array/termux_properties_cursor_style_values"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        app:key="bell-character"
+        app:title="@string/termux_properties_bell_title"
+        app:entries="@array/termux_properties_bell_entries"
+        app:entryValues="@array/termux_properties_bell_values"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <ListPreference
+        app:key="extra-keys-style"
+        app:title="@string/termux_properties_extra_keys_title"
+        app:entries="@array/termux_properties_extra_keys_entries"
+        app:entryValues="@array/termux_properties_extra_keys_values"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        app:key="default-working-directory"
+        app:title="@string/termux_properties_working_dir_title"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+</PreferenceScreen>

@@ -136,8 +136,9 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
         if (entry.isSpecial()) {
             holder.name.setText(entry.name);
-            holder.name.setTextSize(24);
+            holder.name.setTextSize(16);
             holder.meta.setText("");
+            holder.meta.setVisibility(View.GONE);
             if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) {
                 holder.icon.setVisibility(View.INVISIBLE);
                 holder.name.setTextColor(PLACEHOLDER_COLOR);
@@ -156,6 +157,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
         }
 
         holder.icon.setVisibility(View.VISIBLE);
+        holder.meta.setVisibility(View.VISIBLE);
         holder.name.setTextColor(holder.originalTextColor);
         holder.name.setTextSize(14);
         holder.icon.setImageResource(FileIcons.getIconRes(entry));

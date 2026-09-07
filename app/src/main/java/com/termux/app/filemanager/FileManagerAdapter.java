@@ -136,7 +136,7 @@ public class FileManagerAdapter extends RecyclerView.Adapter<FileManagerAdapter.
 
         if (entry.isSpecial()) {
             holder.name.setText(entry.name);
-            holder.name.setTextSize(12);
+            holder.name.setTextSize(24);
             holder.meta.setText("");
             if (entry.special == FileEntry.SPECIAL_PLACEHOLDER) {
                 holder.icon.setVisibility(View.INVISIBLE);

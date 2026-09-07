@@ -78,8 +78,11 @@ public final class ArchiveSource {
                     collect(children, archive, entry.getName(), entry.isDirectory(),
                         entry.getSize(), entry.getLastModifiedDate().getTime(), prefix);
                 }
+            } catch (org.apache.commons.compress.PasswordRequiredException e) {
+                throw password == null ? new PasswordRequiredException() : new WrongPasswordException(e);
             } catch (IOException e) {
-                if (password != null && isPasswordError(e)) throw new WrongPasswordException(e);
+                if (password != null && (isPasswordError(e) || isCorruptData(e)))
+                    throw new WrongPasswordException(e);
                 throw e;
             }
         } else if (isTar(name)) {
@@ -143,6 +146,12 @@ public final class ArchiveSource {
                         if (!entryName.equals(entryPath) && !entryName.startsWith(entryPath + "/")) continue;
                         writeExtracted(archive, sevenZFile.getInputStream(entry), entryName, entry.isDirectory(), destDir);
                     }
+                } catch (org.apache.commons.compress.PasswordRequiredException e) {
+                    throw password == null ? new PasswordRequiredException() : new WrongPasswordException(e);
+                } catch (IOException e) {
+                    if (password != null && (isPasswordError(e) || isCorruptData(e)))
+                        throw new WrongPasswordException(e);
+                    throw e;
                 }
             } else if (isTar(name)) {
                 try (InputStream in = openMaybeCompressed(archive);
@@ -244,6 +253,12 @@ public final class ArchiveSource {
                     addSearchResult(results, archive, normalize(entry.getName()),
                         entry.isDirectory(), entry.getSize(), entry.getLastModifiedDate().getTime(), lower);
                 }
+            } catch (org.apache.commons.compress.PasswordRequiredException e) {
+                throw password == null ? new PasswordRequiredException() : new WrongPasswordException(e);
+            } catch (IOException e) {
+                if (password != null && (isPasswordError(e) || isCorruptData(e)))
+                    throw new WrongPasswordException(e);
+                throw e;
             }
         } else if (isTar(archive.getName())) {
             try (InputStream in = openMaybeCompressed(archive);
@@ -277,6 +292,14 @@ public final class ArchiveSource {
     private static IOException wrapZip4j(net.lingala.zip4j.exception.ZipException e) {
         if (isPasswordError(e)) return new WrongPasswordException(e);
         return e;
+    }
+
+    private static boolean isCorruptData(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof org.tukaani.xz.CorruptedInputException) return true;
+            if (t.getCause() == t) break;
+        }
+        return false;
     }
 
     private static boolean isPasswordError(Throwable e) {

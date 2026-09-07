@@ -700,10 +700,13 @@ public class FileManagerActivity extends AppCompatActivity {
         });
 
         ImageView icon = new ImageView(this);
-        icon.setImageDrawable(ContextCompat.getDrawable(this, iconRes));
+        icon.setImageResource(iconRes);
         TypedValue tintValue = new TypedValue();
-        getTheme().resolveAttribute(androidx.appcompat.R.attr.colorControlNormal, tintValue, true);
-        icon.setColorFilter(tintValue.data);
+        getTheme().resolveAttribute(android.R.attr.textColorPrimary, tintValue, true);
+        if (tintValue.resourceId != 0)
+            icon.setImageTintList(getColorStateList(tintValue.resourceId));
+        else
+            icon.setImageTintList(android.content.res.ColorStateList.valueOf(tintValue.data));
         cell.addView(icon, new LinearLayout.LayoutParams(Math.round(24 * density), Math.round(24 * density)));
 
         TextView text = new TextView(this);

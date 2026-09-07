@@ -80,8 +80,9 @@ public final class TermuxToolsDialog {
             Toast.makeText(activity, R.string.tools_exec_failed, Toast.LENGTH_SHORT).show();
             return;
         }
+        // exec bash keeps the session alive after the command finishes so its output stays visible.
         TermuxSession session = service.createTermuxSession(BIN + "/bash",
-            new String[]{"-lc", command}, null,
+            new String[]{"-lc", command + " ; exec bash"}, null,
             TermuxConstants.TERMUX_HOME_DIR_PATH, false, sessionName);
         if (session == null) {
             Toast.makeText(activity, R.string.tools_exec_failed, Toast.LENGTH_SHORT).show();

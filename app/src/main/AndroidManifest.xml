@@ -103,6 +103,46 @@
             android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
 
         <activity
+            android:name=".app.activities.FileManagerActivity"
+            android:exported="false"
+            android:label="@string/title_file_manager"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".app.activities.EditorActivity"
+            android:exported="false"
+            android:label="@string/fm_edit"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".app.activities.ImageViewerActivity"
+            android:exported="false"
+            android:label="@string/fm_view_image"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".app.activities.CrashReportActivity"
+            android:exported="false"
+            android:label="@string/crash_title"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".app.activities.TermuxForkAboutActivity"
+            android:exported="false"
+            android:label="@string/termux_fork_about_preference_title"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${TERMUX_PACKAGE_NAME}.filemanager"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_manager_paths" />
+        </provider>
+
+        <activity
             android:name=".shared.activities.ReportActivity"
             android:theme="@style/Theme.MarkdownViewActivity.DayNight"
             android:documentLaunchMode="intoExisting" />

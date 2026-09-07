@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="termux_properties_cursor_style_entries">
+        <item>块状 block</item>
+        <item>下划线 underline</item>
+        <item>竖线 bar</item>
+    </string-array>
+    <string-array name="termux_properties_cursor_style_values">
+        <item>block</item>
+        <item>underline</item>
+        <item>bar</item>
+    </string-array>
+    <string-array name="termux_properties_bell_entries">
+        <item>振动 vibrate</item>
+        <item>提示音 beep</item>
+        <item>忽略 ignore</item>
+    </string-array>
+    <string-array name="termux_properties_bell_values">
+        <item>vibrate</item>
+        <item>beep</item>
+        <item>ignore</item>
+    </string-array>
+    <string-array name="termux_properties_extra_keys_entries">
+        <item>默认 default</item>
+        <item>仅方向键 arrows-only</item>
+        <item>全排方向键 arrows-all</item>
+        <item>全部 all</item>
+        <item>无 none</item>
+    </string-array>
+    <string-array name="termux_properties_extra_keys_values">
+        <item>default</item>
+        <item>arrows-only</item>
+        <item>arrows-all</item>
+        <item>all</item>
+        <item>none</item>
+    </string-array>
+</resources>

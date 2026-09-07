@@ -9,13 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.graphics.BlendMode;
-import android.graphics.Color;
-import android.graphics.LinearGradient;
-import android.graphics.RenderEffect;
-import android.graphics.Shader;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.ContextMenu;
@@ -45,9 +39,11 @@ import com.termux.shared.android.PermissionUtils;
 import com.termux.shared.data.DataUtils;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
+import com.termux.app.activities.FileManagerActivity;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
-import com.termux.shared.termux.crash.TermuxCrashUtils;
+import com.termux.app.crash.CrashReportLauncher;
+import com.termux.app.tools.TermuxToolsDialog;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
@@ -143,22 +139,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * The termux sessions list controller.
      */
     TermuxSessionsListViewController mTermuxSessionListViewController;
-
-    /**
-     * Gaussian blur effect for the terminal view while the sessions drawer is open on Android 12+.
-     * The expensive blur kernel is created once; the per-slide mask is rebuilt cheaply on each frame.
-     */
-    private RenderEffect mDrawerBlurEffect;
-
-    /**
-     * Unmodified terminal content, composited under the blurred region so the rest stays sharp.
-     */
-    private RenderEffect mDrawerOriginalEffect;
-
-    /**
-     * Tracks whether the drawer blur effect is currently applied to the terminal view.
-     */
-    private boolean mDrawerBlurApplied;
 
     /**
      * The {@link TermuxActivity} broadcast receiver for various things like terminal style configuration changes.
@@ -265,11 +245,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setTermuxTerminalViewAndClients();
 
-        setupDrawerBlur();
-
         setTerminalToolbarView(savedInstanceState);
 
         setSettingsButtonView();
+
+        setFileManagerButtonView();
+
+        setWrenchButtonView();
 
         setNewSessionButtonView();
 
@@ -339,9 +321,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
 
-        // Check if a crash happened on last run of the app or if a plugin crashed and show a
-        // notification with the crash details if it did
-        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG);
+        // Check if a crash happened on last run of the app and show a crash report screen if it did
+        CrashReportLauncher.checkAndShow(this);
 
         mIsOnResumeAfterOnCreate = false;
     }
@@ -592,6 +573,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ImageButton settingsButton = findViewById(R.id.settings_button);
         settingsButton.setOnClickListener(v -> {
             ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
+        });
+    }
+
+    private void setWrenchButtonView() {
+        ImageButton wrenchButton = findViewById(R.id.wrench_button);
+        wrenchButton.setOnClickListener(v -> {
+            getDrawer().closeDrawers();
+            TermuxToolsDialog.show(this);
+        });
+    }
+
+    private void setFileManagerButtonView() {
+        ImageButton fileManagerButton = findViewById(R.id.file_manager_button);
+        fileManagerButton.setOnClickListener(v -> {
+            getDrawer().closeDrawers();
+            ActivityUtils.startActivity(this, new Intent(this, FileManagerActivity.class));
         });
     }
 
@@ -862,81 +859,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return (DrawerLayout) findViewById(R.id.drawer_layout);
     }
 
-    /** Apply gaussian blur to the terminal area covered by the sessions drawer on Android 12+. */
-    private void setupDrawerBlur() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
-
-        DrawerLayout drawerLayout = getDrawer();
-
-        // Remove the default dim scrim: it stacks with the translucent drawer background and
-        // hides the blurred terminal, making the blur invisible on dark shell screens.
-        drawerLayout.setScrimColor(Color.TRANSPARENT);
-
-        mDrawerBlurEffect = RenderEffect.createBlurEffect(24f, 24f, Shader.TileMode.CLAMP);
-        mDrawerOriginalEffect = RenderEffect.createOffsetEffect(0f, 0f);
-
-        View leftDrawer = findViewById(R.id.left_drawer);
-        drawerLayout.addDrawerListener(new DrawerLayout.SimpleDrawerListener() {
-            @Override
-            public void onDrawerSlide(View drawerView, float slideOffset) {
-                updateDrawerBlur(leftDrawer, slideOffset);
-            }
-
-            @Override
-            public void onDrawerOpened(View drawerView) {
-                updateDrawerBlur(leftDrawer, 1f);
-            }
-
-            @Override
-            public void onDrawerClosed(View drawerView) {
-                updateDrawerBlur(leftDrawer, 0f);
-            }
-        });
-
-        leftDrawer.post(() -> {
-            if (drawerLayout.isDrawerOpen(leftDrawer))
-                updateDrawerBlur(leftDrawer, 1f);
-        });
-    }
-
-    private void updateDrawerBlur(View drawerView, float slideOffset) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mDrawerBlurEffect == null || mTerminalView == null) return;
-
-        if (drawerView == null || slideOffset <= 0f) {
-            if (mDrawerBlurApplied) {
-                mDrawerBlurApplied = false;
-                mTerminalView.setRenderEffect(null);
-                mTerminalView.invalidate();
-            }
-            return;
-        }
-
-        int width = drawerView.getWidth();
-        if (width <= 0) return;
-
-        // Blur exactly the strip the drawer currently covers. The soft edge sits just past the
-        // drawer boundary so the whole drawer area is fully blurred, while the transition to the
-        // sharp terminal happens outside, hidden by the drawer's edge shadow.
-        float edge = width * slideOffset;
-        float fade = Math.min(16f, edge);
-        float total = edge + fade;
-
-        LinearGradient mask = new LinearGradient(0, 0, total, 0,
-            new int[]{0xFFFFFFFF, 0xFFFFFFFF, 0x00000000},
-            new float[]{0f, edge / total, 1f}, Shader.TileMode.CLAMP);
-
-        RenderEffect blurred = RenderEffect.createBlendModeEffect(
-            mDrawerBlurEffect, RenderEffect.createShaderEffect(mask), BlendMode.DST_IN);
-        mTerminalView.setRenderEffect(RenderEffect.createBlendModeEffect(
-            mDrawerOriginalEffect, blurred, BlendMode.SRC_OVER));
-        // setRenderEffect alone does not force the RenderNode to re-record its display list, so
-        // on a static terminal (cursor blinker disabled by default) the old sharp frame keeps being
-        // composited and the blur never shows. Invalidate forces the effect to take hold.
-        mTerminalView.invalidate();
-        mDrawerBlurApplied = true;
-    }
-
-
     public ViewPager getTerminalToolbarViewPager() {
         return (ViewPager) findViewById(R.id.terminal_toolbar_view_pager);
     }
@@ -1048,7 +970,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 switch (intent.getAction()) {
                     case TERMUX_ACTIVITY.ACTION_NOTIFY_APP_CRASH:
                         Logger.logDebug(LOG_TAG, "Received intent to notify app crash");
-                        TermuxCrashUtils.notifyAppCrashFromCrashLogFile(context, LOG_TAG);
+                        CrashReportLauncher.checkAndShow(TermuxActivity.this);
                         return;
                     case TERMUX_ACTIVITY.ACTION_RELOAD_STYLE:
                         Logger.logDebug(LOG_TAG, "Received intent to reload styling");

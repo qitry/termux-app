@@ -2,7 +2,7 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux">
+    <!ENTITY TERMUX_APP_NAME "Termux Fork">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
@@ -50,6 +50,123 @@
     <string name="action_rename_session">重命名</string>
     <string name="action_delete_session">删除会话</string>
     <string name="default_session_name">Termux OS</string>
+
+    <!-- 文件管理器 -->
+    <string name="title_file_manager">文件管理</string>
+    <string name="action_open_file_manager">文件管理</string>
+    <string name="fm_up">上级目录</string>
+    <string name="fm_refresh">刷新</string>
+    <string name="fm_copy">复制</string>
+    <string name="fm_rename">重命名</string>
+    <string name="fm_delete">删除</string>
+    <string name="fm_select_all">全选</string>
+    <string name="fm_new_folder">新建文件夹</string>
+    <string name="fm_confirm">确定</string>
+    <string name="fm_selected_count">已选择 %1$d 项</string>
+    <string name="fm_invalid_name">名称无效</string>
+    <string name="fm_rename_failed">重命名失败</string>
+    <string name="fm_new_folder_failed">创建文件夹失败</string>
+    <string name="fm_delete_confirm_title">确认删除</string>
+    <string name="fm_delete_confirm_message">确定删除 %1$d 个项目？此操作不可撤销。</string>
+    <string name="fm_delete_failed">部分项目删除失败</string>
+    <string name="fm_conflict_title">文件已存在</string>
+    <string name="fm_conflict_message">目标位置存在同名项目，如何处理？</string>
+    <string name="fm_overwrite">覆盖</string>
+    <string name="fm_skip">跳过</string>
+    <string name="fm_no_app_to_open">没有应用可以打开此文件</string>
+    <string name="fm_open_failed">无法打开文件</string>
+    <string name="fm_extract">解压</string>
+    <string name="fm_compress">压缩</string>
+    <string name="fm_extract_failed">解压失败</string>
+    <string name="fm_compress_failed">压缩失败</string>
+    <string name="fm_archive_failed">无法读取压缩包</string>
+    <string name="fm_operation_failed">操作失败</string>
+    <string name="fm_password_title">请输入压缩包密码</string>
+    <string name="fm_wrong_password">密码错误</string>
+    <string name="fm_compress_password">设置压缩包密码（可跳过）</string>
+    <string name="fm_no_password">不加密</string>
+    <string name="fm_back_to_terminal">返回终端</string>
+    <string name="fm_search">搜索</string>
+    <string name="fm_searching">搜索：%1$s</string>
+    <string name="fm_path_jump">跳转到路径</string>
+    <string name="fm_invalid_path">路径不存在</string>
+
+    <!-- 崩溃报告 -->
+    <string name="crash_title">应用崩溃报告</string>
+    <string name="crash_share">分享</string>
+    <string name="crash_export">导出</string>
+    <string name="crash_upload">上传 LogShare</string>
+    <string name="crash_uploaded">上传成功</string>
+    <string name="crash_upload_failed">上传失败</string>
+    <string name="crash_exported">已导出：%1$s</string>
+    <string name="crash_export_failed">导出失败</string>
+    <string name="crash_copy_link">复制链接</string>
+    <string name="crash_open_link">打开链接</string>
+    <string name="crash_copied">已复制到剪贴板</string>
+
+    <!-- Termux Fork 关于 -->
+    <string name="termux_fork_about_preference_title">关于 Termux Fork</string>
+    <string name="termux_fork_about_version">版本 %1$s</string>
+    <string name="termux_fork_about_author">作者</string>
+    <string name="termux_fork_about_author_detail">燕岁 YanSui · 柠泽工作室 CTO</string>
+    <string name="termux_fork_about_email">lyl518@outlook.com</string>
+    <string name="termux_fork_about_author_github">个人 GitHub：github.com/qitry</string>
+    <string name="termux_fork_about_project_github">项目 GitHub：github.com/qitry/termux-app</string>
+    <string name="termux_fork_about_bio_title">项目简介</string>
+    <string name="termux_fork_about_bio">Termux Fork 是基于 Termux 官方版本的功能增强分支，致力于在移动终端上提供更完整的集成体验。项目在保留原版简洁与稳定的基础上，深度优化了侧栏交互，并内置一款双栏文件管理器——支持文本编辑、图片查看、压缩包浏览与解压，让文件操作不再依赖外部应用。\n\n谈及缘起：作者长期使用 ZeroTermux，却渐为其臃肿与繁琐的交互所困；转投原版 Termux 后，虽欣赏其克制与稳定，但功能上的留白仍让日常使用多有不便。于是有了 Termux Fork——不为取代，只为补全，愿极简与强能可以兼得。</string>
+
+    <!-- 打开方式 -->
+    <string name="fm_mode_system">系统默认</string>
+    <string name="fm_mode_editor">内置编辑器</string>
+    <string name="fm_mode_viewer">内置图片查看</string>
+    <string name="fm_mode_archive">内置压缩包浏览</string>
+    <string name="fm_default_set">已将 %1$s 默认设为「%2$s」</string>
+    <string name="fm_mode_unsupported_in_archive">压缩包内仅支持系统打开</string>
+    <string name="fm_searching_now">搜索中…</string>
+    <string name="fm_no_results">无匹配项</string>
+    <string name="fm_back_to_previous">← 返回上一页</string>
+    <string name="fm_parent_directory">↑ 返回上级目录</string>
+    <string name="fm_open_with_title">打开方式（长按设为默认）</string>
+
+    <!-- 侧栏工具弹窗 -->
+    <string name="action_open_tools">工具</string>
+    <string name="tools_title">Termux 工具</string>
+    <string name="tools_install">安装 termux-api / termux-tools</string>
+    <string name="tools_install_session_name">安装工具包</string>
+    <string name="tools_system_info">系统信息</string>
+    <string name="tools_battery">电池状态</string>
+    <string name="tools_wake_lock">唤醒锁</string>
+    <string name="tools_wake_unlock">解除唤醒锁</string>
+    <string name="tools_storage_setup">存储设置</string>
+    <string name="tools_change_repo">更换镜像源</string>
+    <string name="tools_exec_failed">执行失败，请确认已安装 termux-api 及 Termux:API 伴侣应用</string>
+
+    <!-- 高级设置（termux.properties） -->
+    <string name="termux_properties_preferences_title">高级设置（termux.properties）</string>
+    <string name="termux_properties_preferences_summary">直接编辑 termux.properties 中的常用配置，修改后自动刷新终端</string>
+    <string name="termux_properties_fullscreen_title">全屏模式</string>
+    <string name="termux_properties_fullscreen_summary">隐藏状态栏与导航栏</string>
+    <string name="termux_properties_black_ui_title">纯黑背景</string>
+    <string name="termux_properties_fullscreen_workaround_title">全屏兼容模式</string>
+    <string name="termux_properties_cursor_blink_title">光标闪烁间隔（毫秒）</string>
+    <string name="termux_properties_cursor_blink_summary">0 表示关闭闪烁</string>
+    <string name="termux_properties_cursor_style_title">光标样式</string>
+    <string name="termux_properties_bell_title">铃声行为</string>
+    <string name="termux_properties_extra_keys_title">附加按键样式</string>
+    <string name="termux_properties_working_dir_title">默认工作目录</string>
+    <string name="termux_properties_saved">已保存，重启 Termux 后生效</string>
+    <string name="termux_properties_save_failed">写入 termux.properties 失败</string>
+    <string name="fm_open_with">打开方式</string>
+    <string name="fm_view_image">查看图片</string>
+    <string name="fm_edit">编辑</string>
+    <string name="fm_move">移动</string>
+    <string name="fm_move_failed">部分项目移动失败</string>
+    <string name="fm_copy_failed">部分项目复制失败</string>
+    <string name="fm_target_opposite">对面栏：%1$s</string>
+    <string name="fm_target_current">本栏：%1$s</string>
+    <string name="fm_save">保存</string>
+    <string name="fm_saved">已保存</string>
+    <string name="fm_save_failed">保存失败</string>
 
     <string name="action_toggle_soft_keyboard">键盘</string>
 

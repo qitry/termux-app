@@ -12,7 +12,7 @@ import androidx.preference.PreferenceManager;
 
 import com.termux.R;
 import com.termux.shared.termux.TermuxConstants;
-import com.termux.shared.termux.TermuxConstants.TERMUX_ACTIVITY;
+import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedProperties;
 
 import java.io.BufferedReader;

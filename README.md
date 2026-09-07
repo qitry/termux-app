@@ -1,3 +1,31 @@
+# Termux Fork
+
+[![Build status](https://github.com/qitry/termux-app/workflows/Build/badge.svg)](https://github.com/qitry/termux-app/actions)
+[![Testing status](https://github.com/qitry/termux-app/workflows/Unit%20tests/badge.svg)](https://github.com/qitry/termux-app/actions)
+
+Termux Fork 是基于官方 [Termux](https://termux.dev) 的功能增强分支，致力于在移动终端上提供更完整的集成体验。项目在保留原版简洁与稳定的基础上，深度优化了侧栏交互，并内置一款双栏文件管理器——支持文本编辑、图片查看、压缩包浏览与解压，让文件操作不再依赖外部应用。
+
+谈及缘起：作者长期使用 ZeroTermux，却渐为其臃肿与繁琐的交互所困；转投原版 Termux 后，虽欣赏其克制与稳定，但功能上的留白仍让日常使用多有不便。于是有了 Termux Fork——不为取代，只为补全，愿极简与强能可以兼得。
+
+### 主要增强
+
+- **双栏文件管理器**：左栏 Termux `$HOME`、右栏 Android 共享存储；滑动区间多选、长按操作弹窗、复制/移动/重命名/删除/新建、当前目录递归搜索、路径跳转与历史导航
+- **压缩包**：zip/jar/apk/tar/tgz/7z 直接点击进入浏览，支持解压与压缩（含加密包的密码输入与 AES-256 加密压缩）
+- **内置编辑器与看图**：Sora Editor（极简语法高亮、暗色适配）与 PhotoView 图片缩放查看；按文件后缀可设置默认打开方式
+- **侧栏工具弹窗**：系统信息、电池状态、唤醒锁、存储设置、更换镜像源等 termux-api/termux-tools 快捷入口
+- **高级设置**：设置内直接读写 `termux.properties` 常用项（全屏、光标、铃声、附加按键等）
+- **崩溃报告**：崩溃后弹出报告界面，支持分享、导出与上传 [LogShare](https://logshare.cn)
+- **会话数无上限**
+
+### 关于
+
+作者：燕岁 YanSui · 柠泽工作室 CTO · [lyl518@outlook.com](mailto:lyl518@outlook.com)
+个人 GitHub：[github.com/qitry](https://github.com/qitry) · 项目 GitHub：[github.com/qitry/termux-app](https://github.com/qitry/termux-app)
+
+---
+
+以下为原版 Termux 文档（原作者信息保留于此）。
+
 # Termux application
 
 [![Build status](https://github.com/termux/termux-app/workflows/Build/badge.svg)](https://github.com/termux/termux-app/actions)

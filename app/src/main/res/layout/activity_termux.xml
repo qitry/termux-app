@@ -84,10 +84,10 @@
                         app:tint="?attr/termuxActivityDrawerImageTint" />
 
                     <ImageButton
-                        android:id="@+id/wrench_button"
+                        android:id="@+id/floating_overlay_button"
                         android:layout_width="40dp"
                         android:layout_height="40dp"
-                        android:src="@drawable/ic_fm_wrench"
+                        android:src="@drawable/ic_floating_overlay"
                         android:background="@null"
                         android:contentDescription="@string/action_open_tools"
                         app:tint="?attr/termuxActivityDrawerImageTint" />

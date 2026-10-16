@@ -20,11 +20,11 @@ Termux Fork —— 基于官方 termux-app 的功能增强 fork。纯 Java（无
 - **压缩包**：zip/jar/apk 走 **zip4j**（密码支持）；tar/tgz/7z 走 **commons-compress 1.24.0**。加密包密码经 `ArchiveSource.PasswordRequiredException`/`WrongPasswordException` 驱动弹窗询问，按包路径缓存。
 - **编辑器**：Sora Editor 0.23.6（Kotlin 库，Java 调用，仅传递 kotlin-stdlib）+ 自写 `RegexHighlightLanguage`（`SimpleAnalyzeManager` + `MappedSpans.Builder`）；暗色用 `SchemeDarcula`。
 - **看图**：PhotoView 2.3.0（jitpack，仓库已配置）。
-- **侧栏工具弹窗**（`com.termux.app.tools.TermuxToolsDialog`）：termux-api/termux-tools 快捷入口，全部以 `bash -lc "命令 ; exec bash"` 新终端会话执行（`; exec bash` 保活以保留输出）；缺包时首项为 `pkg install -y termux-api termux-tools`。
+- **保活悬浮窗**（`com.termux.app.overlay.FloatingStatusOverlay` + `FloatingOverlayDialog`）：显示绿点 +「运行中」的 `TYPE_APPLICATION_OVERLAY` 窗口，由 `TermuxService` 在 `onCreate` 显示、`onDestroy` 移除（退出应用即消失，切换应用时保留）。两种模式——`可移动`（默认，`FLAG_NOT_TOUCH_MODAL` + `OnTouchListener` 拖动并吞掉点击）与 `完全穿透`（`FLAG_NOT_TOUCHABLE`，不可移动、不影响下层点击）；透明度 20%–100% 可调；始终 `FLAG_NOT_FOCUSABLE`。配置存于 `floating_overlay` SharedPreferences（`enabled`/`movable`/`alpha`/`x`/`y`）。无「显示在其他应用上层」权限时对话框引导跳转系统授权页。侧栏入口按钮为 `floating_overlay_button`（原扳手工具集 `TermuxToolsDialog` 已整体移除）。
 - **高级设置**（`PropertiesPreferencesFragment`）：直接读写 `~/.termux/termux.properties`（保留注释）。DataStore 必须读**原始文件**而非解析后的 Properties——`use-black-ui` 等键在解析时会被 TermuxSharedProperties 替换，读内存值会导致开关回弹。保存后不自动刷新，提示用户重启。
 - **崩溃报告**：`CrashReportLauncher` 启动时检测 `~/crash_log.md` → 弹 `CrashReportActivity`（替代上游通知），支持分享/导出到 Download/上传 LogShare（`POST https://api.logshare.cn/v1/log`，JSON `{content, source}`，返回 `url`）。
 - **会话数无上限**（上游 `MAX_SESSIONS = 8` 已移除）。
-- **侧栏外观**：不透明背景（模糊方案已整体移除），头部为标题左上 + 设置/文件/扳手图标右下。
+- **侧栏外观**：不透明背景（模糊方案已整体移除），头部为标题左上 + 设置/文件/悬浮窗图标右下。
 
 ## 关键约束
 - C 代码（`terminal-emulator/src/main/jni`、`app/src/main/cpp`）以 `-Wall -Wextra -Werror` 编译，任何 C 警告都会导致构建失败。

@@ -43,7 +43,8 @@ import com.termux.app.activities.FileManagerActivity;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
 import com.termux.app.crash.CrashReportLauncher;
-import com.termux.app.tools.TermuxToolsDialog;
+import com.termux.app.overlay.FloatingOverlayDialog;
+import com.termux.app.overlay.FloatingStatusOverlay;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
@@ -251,7 +252,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setFileManagerButtonView();
 
-        setWrenchButtonView();
+        setFloatingOverlayButtonView();
 
         setNewSessionButtonView();
 
@@ -323,6 +324,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         // Check if a crash happened on last run of the app and show a crash report screen if it did
         CrashReportLauncher.checkAndShow(this);
+
+        // Re-sync the keep-alive overlay, e.g. after the user granted the overlay permission in
+        // system settings and returned, or after the service was restarted.
+        FloatingStatusOverlay overlay = FloatingStatusOverlay.getInstance(this);
+        if (FloatingStatusOverlay.isEnabled(this) && !overlay.isShown()) overlay.show();
 
         mIsOnResumeAfterOnCreate = false;
     }
@@ -576,11 +582,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         });
     }
 
-    private void setWrenchButtonView() {
-        ImageButton wrenchButton = findViewById(R.id.wrench_button);
-        wrenchButton.setOnClickListener(v -> {
+    private void setFloatingOverlayButtonView() {
+        ImageButton overlayButton = findViewById(R.id.floating_overlay_button);
+        overlayButton.setOnClickListener(v -> {
             getDrawer().closeDrawers();
-            TermuxToolsDialog.show(this);
+            FloatingOverlayDialog.show(this);
         });
     }
 

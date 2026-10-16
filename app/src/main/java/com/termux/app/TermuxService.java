@@ -20,6 +20,7 @@ import androidx.annotation.Nullable;
 
 import com.termux.R;
 import com.termux.app.event.SystemEventReceiver;
+import com.termux.app.overlay.FloatingStatusOverlay;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalSessionServiceClient;
 import com.termux.shared.termux.plugins.TermuxPluginUtils;
@@ -119,6 +120,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         runStartForeground();
 
+        // Show the keep-alive overlay if the user enabled it. This is a no-op when the overlay is
+        // disabled or the "display over other apps" permission has not been granted.
+        FloatingStatusOverlay.getInstance(this).show();
+
         SystemEventReceiver.registerPackageUpdateEvents(this);
     }
 
@@ -178,6 +183,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         TermuxShellManager.onAppExit(this);
 
         SystemEventReceiver.unregisterPackageUpdateEvents(this);
+
+        FloatingStatusOverlay.getInstance(this).hide();
 
         runStopForeground();
     }

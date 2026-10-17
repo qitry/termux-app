@@ -43,8 +43,8 @@ import com.termux.app.activities.FileManagerActivity;
 import com.termux.app.activities.HelpActivity;
 import com.termux.app.activities.SettingsActivity;
 import com.termux.app.crash.CrashReportLauncher;
+import com.termux.app.keepalive.KeepAlivePreferences;
 import com.termux.app.overlay.FloatingOverlayDialog;
-import com.termux.app.overlay.FloatingStatusOverlay;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.app.terminal.TermuxSessionsListViewController;
 import com.termux.app.terminal.io.TerminalToolbarViewPager;
@@ -322,13 +322,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mTermuxTerminalViewClient != null)
             mTermuxTerminalViewClient.onResume();
 
+        // The system may have trimmed the scrollback buffers while the app was in the background;
+        // give the sessions their configured capacity back now that the app is in the foreground.
+        if (mTermuxService != null) {
+            mTermuxService.restoreSessionTranscripts();
+            mTermuxService.clearTaskRemovedState();
+        }
+
         // Check if a crash happened on last run of the app and show a crash report screen if it did
         CrashReportLauncher.checkAndShow(this);
-
-        // Re-sync the keep-alive overlay, e.g. after the user granted the overlay permission in
-        // system settings and returned, or after the service was restarted.
-        FloatingStatusOverlay overlay = FloatingStatusOverlay.getInstance(this);
-        if (FloatingStatusOverlay.isEnabled(this) && !overlay.isShown()) overlay.show();
 
         mIsOnResumeAfterOnCreate = false;
     }
@@ -631,6 +633,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void onBackPressed() {
         if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
             getDrawer().closeDrawers();
+        } else if (KeepAlivePreferences.isBackKeyMinimizeEnabled(this)) {
+            // Minimize instead of destroying the activity so that the terminal sessions, the
+            // scroll position and the soft keyboard state survive. The service keeps running and
+            // the user can truly exit from the notification action.
+            moveTaskToBack(true);
         } else {
             finishActivityIfNotFinishing();
         }

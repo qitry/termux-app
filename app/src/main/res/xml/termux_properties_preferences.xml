@@ -53,4 +53,13 @@
         app:useSimpleSummaryProvider="true"
         app:iconSpaceReserved="false" />
 
+    <ListPreference
+        app:key="terminal-transcript-rows"
+        app:title="@string/termux_properties_transcript_rows_title"
+        app:summary="@string/termux_properties_transcript_rows_summary"
+        app:entries="@array/termux_properties_transcript_rows_entries"
+        app:entryValues="@array/termux_properties_transcript_rows_values"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
 </PreferenceScreen>

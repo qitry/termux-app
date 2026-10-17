@@ -163,6 +163,8 @@ public final class TerminalEmulator {
 
     /** The normal screen buffer. Stores the characters that appear on the screen of the emulated terminal. */
     private final TerminalBuffer mMainBuffer;
+    /** The total row capacity the main buffer was created with, used to restore it after a trim. */
+    private final int mMainBufferTotalRowsCapacity;
     /**
      * The alternate screen buffer, exactly as large as the display and contains no additional saved lines (so that when
      * the alternate screen buffer is active, you cannot scroll back to view saved lines).
@@ -327,7 +329,8 @@ public final class TerminalEmulator {
 
     public TerminalEmulator(TerminalOutput session, int columns, int rows, int cellWidthPixels, int cellHeightPixels, Integer transcriptRows, TerminalSessionClient client) {
         mSession = session;
-        mScreen = mMainBuffer = new TerminalBuffer(columns, getTerminalTranscriptRows(transcriptRows), rows);
+        mMainBufferTotalRowsCapacity = getTerminalTranscriptRows(transcriptRows);
+        mScreen = mMainBuffer = new TerminalBuffer(columns, mMainBufferTotalRowsCapacity, rows);
         mAltBuffer = new TerminalBuffer(columns, rows, rows);
         mClient = client;
         mRows = rows;
@@ -419,6 +422,36 @@ public final class TerminalEmulator {
         mScreen.resize(mColumns, mRows, newTotalRows, cursor, getStyle(), isAlternateBufferActive());
         mCursorCol = cursor[0];
         mCursorRow = cursor[1];
+    }
+
+    /**
+     * Drop the oldest scrollback history to release memory, keeping at most
+     * {@code keepTranscriptRows} rows above the visible screen. The visible screen is preserved,
+     * so this is safe to call while the session is in use.
+     * <p/>
+     * Only the main buffer holds history, the alternate buffer is always screen sized.
+     *
+     * @param keepTranscriptRows The maximum number of history rows to keep.
+     * @return {@code true} if any history was dropped.
+     */
+    public boolean shrinkTranscript(int keepTranscriptRows) {
+        if (keepTranscriptRows < 0) keepTranscriptRows = 0;
+        return mMainBuffer.resizeTranscript(mRows + keepTranscriptRows);
+    }
+
+    /** Restores the scrollback capacity this emulator was created with. */
+    public boolean restoreTranscript() {
+        return mMainBuffer.resizeTranscript(mMainBufferTotalRowsCapacity);
+    }
+
+    /** The maximum number of scrollback rows this emulator was created with. */
+    public int getTranscriptRowsCapacity() {
+        return mMainBufferTotalRowsCapacity - mRows;
+    }
+
+    /** The number of scrollback rows currently stored above the visible screen. */
+    public int getActiveTranscriptRows() {
+        return mMainBuffer.getActiveTranscriptRows();
     }
 
     public int getCursorRow() {

@@ -231,6 +231,34 @@ public final class TerminalSession extends TerminalOutput {
         notifyScreenUpdate();
     }
 
+    /**
+     * Drop the oldest scrollback history to release memory, keeping at most
+     * {@code keepTranscriptRows} rows above the visible screen. The visible screen is preserved.
+     *
+     * @param keepTranscriptRows The maximum number of history rows to keep.
+     * @return {@code true} if any history was dropped.
+     */
+    public boolean shrinkTranscript(int keepTranscriptRows) {
+        if (mEmulator == null) return false;
+        boolean shrunk = mEmulator.shrinkTranscript(keepTranscriptRows);
+        if (shrunk) notifyScreenUpdate();
+        return shrunk;
+    }
+
+    /**
+     * Restores the scrollback capacity this session was created with. Only the free capacity is
+     * allocated here, the history itself fills back up lazily as new lines scroll off the screen.
+     */
+    public void restoreTranscript() {
+        if (mEmulator == null) return;
+        mEmulator.restoreTranscript();
+    }
+
+    /** The number of scrollback rows currently stored above the visible screen. */
+    public int getActiveTranscriptRows() {
+        return mEmulator == null ? 0 : mEmulator.getActiveTranscriptRows();
+    }
+
     /** Finish this terminal session by sending SIGKILL to the shell. */
     public void finishIfRunning() {
         if (isRunning()) {

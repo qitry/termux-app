@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.WindowManager;
 
 import com.termux.R;
+import com.termux.app.keepalive.AppForegroundTracker;
 
 /**
  * A small always-on-top window showing a green dot and a "运行中" label, used as a visual
@@ -56,6 +57,13 @@ public final class FloatingStatusOverlay {
     private WindowManager.LayoutParams mLayoutParams;
     private boolean mShown;
 
+    /**
+     * The overlay is a background indicator, so it is suppressed while a Termux activity is in the
+     * foreground (the terminal itself, the file manager, the editor...) and only shown when the app
+     * moves to the background.
+     */
+    private boolean mForeground;
+
     private int mTouchStartX;
     private int mTouchStartY;
     private float mTouchStartRawX;
@@ -66,6 +74,11 @@ public final class FloatingStatusOverlay {
         mContext = context.getApplicationContext();
         mWindowManager = (WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE);
         mPreferences = mContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+
+        // The overlay only makes sense in the background, so follow the process wide foreground
+        // state instead of hooking every single activity.
+        AppForegroundTracker tracker = AppForegroundTracker.get();
+        if (tracker != null) tracker.setListener(this::onAppForegroundChanged);
     }
 
     public static synchronized FloatingStatusOverlay getInstance(Context context) {
@@ -129,6 +142,7 @@ public final class FloatingStatusOverlay {
      */
     public synchronized void show() {
         if (mShown) return;
+        if (mForeground) return;
         if (!isEnabled(mContext)) return;
         if (!canDrawOverlays(mContext)) return;
 
@@ -183,6 +197,19 @@ public final class FloatingStatusOverlay {
 
     public synchronized boolean isShown() {
         return mShown;
+    }
+
+    /**
+     * Hides the overlay while a Termux activity is in the foreground and shows it again once the
+     * whole app moves to the background. Driven by {@link AppForegroundTracker}.
+     */
+    private synchronized void onAppForegroundChanged(boolean foreground) {
+        mForeground = foreground;
+        if (foreground) {
+            hide();
+        } else if (isEnabled(mContext)) {
+            show();
+        }
     }
 
     private WindowManager.LayoutParams buildLayoutParams() {

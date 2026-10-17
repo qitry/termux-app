@@ -34,4 +34,18 @@
         <item>all</item>
         <item>none</item>
     </string-array>
+    <string-array name="termux_properties_transcript_rows_entries">
+        <item>500 行（最省内存）</item>
+        <item>1000 行</item>
+        <item>2000 行（默认）</item>
+        <item>5000 行</item>
+        <item>10000 行（最耗内存）</item>
+    </string-array>
+    <string-array name="termux_properties_transcript_rows_values">
+        <item>500</item>
+        <item>1000</item>
+        <item>2000</item>
+        <item>5000</item>
+        <item>10000</item>
+    </string-array>
 </resources>

@@ -4,6 +4,7 @@ import android.app.Application;
 import android.content.Context;
 
 import com.termux.BuildConfig;
+import com.termux.app.keepalive.AppForegroundTracker;
 import com.termux.shared.errors.Error;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxBootstrap;
@@ -31,6 +32,9 @@ public class TermuxApplication extends Application {
 
         // Set log config for the app
         setLogConfig(context);
+
+        // Track when the whole app enters or leaves the foreground, used by the keep-alive overlay
+        AppForegroundTracker.init(this);
 
         Logger.logDebug("Starting Application");
 

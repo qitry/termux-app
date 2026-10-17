@@ -30,4 +30,54 @@ public class HistoryTest extends TerminalTestCase {
 		enterString("LMN").assertLinesAre("111", "IJK", "LMN", "444").assertHistoryStartsWith("FGH", "CDE");
 	}
 
+	/** Shrinking the transcript must keep the visible screen and allow the capacity to come back. */
+	public void testShrinkAndRestoreTranscript() {
+		withTerminalSized(3, 3).enterString("111222333444555666777888999");
+		assertLinesAre("777", "888", "999");
+		// The test terminal is created with rows * 2 total rows, so it holds 3 rows of history.
+		assertEquals(3, mTerminal.getTranscriptRowsCapacity());
+		assertHistoryStartsWith("666", "555", "444");
+
+		assertTrue(mTerminal.shrinkTranscript(1));
+		assertLinesAre("777", "888", "999");
+		assertEquals(1, mTerminal.getActiveTranscriptRows());
+		assertEquals(1, mTerminal.getTranscriptRowsCapacity());
+		assertHistoryStartsWith("666");
+
+		mTerminal.restoreTranscript();
+		assertEquals(3, mTerminal.getTranscriptRowsCapacity());
+		assertLinesAre("777", "888", "999");
+		assertHistoryStartsWith("666");
+
+		// History grows again, up to the restored capacity.
+		enterString("\n\n");
+		assertLinesAre("999", "", "");
+		assertEquals(3, mTerminal.getActiveTranscriptRows());
+		assertHistoryStartsWith("888", "777", "666");
+	}
+
+	/** Shrinking below the number of screen rows must not corrupt the buffer. */
+	public void testShrinkTranscriptBelowScreenRows() {
+		withTerminalSized(3, 3).enterString("111222333444555666777888999");
+		assertLinesAre("777", "888", "999");
+		assertHistoryStartsWith("666", "555", "444");
+
+		assertTrue(mTerminal.shrinkTranscript(0));
+		assertLinesAre("777", "888", "999");
+		assertEquals(0, mTerminal.getActiveTranscriptRows());
+		assertEquals(0, mTerminal.getTranscriptRowsCapacity());
+
+		// With no capacity a new scroll cannot keep anything in history.
+		enterString("\n");
+		assertLinesAre("888", "999", "");
+		assertEquals(0, mTerminal.getActiveTranscriptRows());
+
+		// Capacity stays gone until it is restored.
+		assertFalse(mTerminal.shrinkTranscript(0));
+		assertTrue(mTerminal.restoreTranscript());
+		assertEquals(3, mTerminal.getTranscriptRowsCapacity());
+		enterString("\n");
+		assertEquals(1, mTerminal.getActiveTranscriptRows());
+	}
+
 }

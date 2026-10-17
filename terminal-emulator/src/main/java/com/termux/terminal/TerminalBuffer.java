@@ -494,4 +494,44 @@ public final class TerminalBuffer {
         mActiveTranscriptRows = 0;
     }
 
+    /**
+     * Change the total row capacity of this buffer, keeping the visible screen and as much of the
+     * newest history as fits.
+     * <p/>
+     * Shrinking releases the {@link TerminalRow} objects of the dropped history right away, which is
+     * what makes this useful under memory pressure. Growing only allocates the row reference array
+     * again; the extra capacity stays empty and is filled lazily as new lines scroll off the screen,
+     * so restoring the capacity is cheap.
+     *
+     * @param newTotalRows The new total number of rows (history + screen), clamped to at least the
+     *                     number of screen rows.
+     * @return {@code true} if the buffer was actually resized, {@code false} otherwise.
+     */
+    public boolean resizeTranscript(int newTotalRows) {
+        if (newTotalRows < mScreenRows) newTotalRows = mScreenRows;
+
+        final int keptTranscriptRows = Math.min(mActiveTranscriptRows, newTotalRows - mScreenRows);
+        if (newTotalRows == mTotalRows && keptTranscriptRows == mActiveTranscriptRows) return false;
+
+        TerminalRow[] oldLines = mLines;
+        final int oldTotalRows = mTotalRows;
+        final int oldScreenFirstRow = mScreenFirstRow;
+
+        TerminalRow[] newLines = new TerminalRow[newTotalRows];
+        // Lay the retained history out first followed by the visible screen, so the new buffer needs
+        // no circular wrap around and any extra capacity stays at the end as empty rows.
+        for (int externalRow = -keptTranscriptRows; externalRow < mScreenRows; externalRow++) {
+            int oldInternalRow = oldScreenFirstRow + externalRow;
+            oldInternalRow = (oldInternalRow < 0) ? (oldTotalRows + oldInternalRow) : (oldInternalRow % oldTotalRows);
+            newLines[keptTranscriptRows + externalRow] = oldLines[oldInternalRow];
+        }
+
+        mLines = newLines;
+        mTotalRows = newTotalRows;
+        mActiveTranscriptRows = keptTranscriptRows;
+        // The visible screen starts right after the retained history.
+        mScreenFirstRow = keptTranscriptRows;
+        return true;
+    }
+
 }

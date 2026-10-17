@@ -142,6 +142,26 @@
     <string name="overlay_permission_hint">需要「显示在其他应用上层」权限，开启时会引导授权。</string>
     <string name="overlay_permission_required">请先授予「显示在其他应用上层」权限</string>
     <string name="overlay_show_failed">悬浮窗显示失败，请检查悬浮窗权限</string>
+    <string name="overlay_section_overlay">悬浮窗</string>
+    <string name="overlay_enabled_background_only">已开启，切到后台后显示</string>
+
+    <!-- 后台保活 -->
+    <string name="keep_alive_section">后台保活</string>
+    <string name="keep_alive_back_minimize">返回键最小化（不退出）</string>
+    <string name="keep_alive_battery_status_ok">已忽略电池优化，后台限制较少。</string>
+    <string name="keep_alive_battery_status_pending">未忽略电池优化，系统可能在后台限制或清理进程。</string>
+    <string name="keep_alive_battery_action">忽略电池优化</string>
+    <string name="keep_alive_battery_already">已经忽略电池优化</string>
+    <string name="keep_alive_app_settings_action">打开应用设置（自启动 / 后台运行）</string>
+    <string name="keep_alive_stats">当前 %1$d 个会话，每会话保留 %2$d 行历史</string>
+    <string name="keep_alive_session_warning">已打开 %1$d 个会话，每个会话都会占用内存，低内存设备可能因此更容易被系统清理</string>
+    <string name="keep_alive_hint_coloros">ColorOS / realme UI：设置 → 电池 → 允许后台运行；并在最近任务中下拉锁定 Termux。</string>
+    <string name="keep_alive_hint_miui">HyperOS / MIUI：应用设置 → 自启动，并将省电策略设为「无限制」。</string>
+    <string name="keep_alive_hint_emui">EMUI / HarmonyOS：应用启动管理 → 手动管理，允许自启动、关联启动与后台活动。</string>
+    <string name="keep_alive_hint_originos">OriginOS：后台高耗电 → 允许后台高耗电；i管家 → 自启动中允许 Termux。</string>
+    <string name="keep_alive_hint_samsung">One UI：电池 → 后台使用限制，将 Termux 加入「永不休眠的应用」。</string>
+    <string name="keep_alive_hint_generic">在系统设置中允许 Termux 自启动与后台运行，并在最近任务中锁定它。</string>
+    <string name="notification_background_running">仍在后台运行</string>
 
     <!-- 高级设置（termux.properties） -->
     <string name="termux_properties_preferences_title">高级设置（termux.properties）</string>
@@ -156,6 +176,8 @@
     <string name="termux_properties_bell_title">铃声行为</string>
     <string name="termux_properties_extra_keys_title">附加按键样式</string>
     <string name="termux_properties_working_dir_title">默认工作目录</string>
+    <string name="termux_properties_transcript_rows_title">终端历史行数</string>
+    <string name="termux_properties_transcript_rows_summary">每个会话保留的回滚历史，越小越省内存</string>
     <string name="termux_properties_saved">已保存，重启 Termux 后生效</string>
     <string name="termux_properties_save_failed">写入 termux.properties 失败</string>
     <string name="fm_open_with">打开方式</string>

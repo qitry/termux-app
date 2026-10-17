@@ -5,6 +5,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
@@ -14,12 +15,14 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.R;
 import com.termux.app.event.SystemEventReceiver;
+import com.termux.app.keepalive.KeepAlivePreferences;
 import com.termux.app.overlay.FloatingStatusOverlay;
 import com.termux.app.terminal.TermuxTerminalSessionActivityClient;
 import com.termux.app.terminal.TermuxTerminalSessionServiceClient;
@@ -106,7 +109,18 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     /** If the user has executed the {@link TERMUX_SERVICE#ACTION_STOP_SERVICE} intent. */
     boolean mWantsToStop = false;
 
+    /** If the user removed the task from the recents screen, used to tweak the notification text. */
+    private boolean mTaskRemoved = false;
+
     private static final String LOG_TAG = "TermuxService";
+
+    /** Scrollback rows kept per session when the system reports low memory. */
+    private static final int TRIM_TRANSCRIPT_ROWS_LOW = 200;
+    /** Scrollback rows kept per session when the system reports critical memory pressure. */
+    private static final int TRIM_TRANSCRIPT_ROWS_CRITICAL = 50;
+
+    /** Number of open sessions above which the user is warned once about memory usage. */
+    private static final int SESSION_COUNT_WARNING_THRESHOLD = 6;
 
     @Override
     public void onCreate() {
@@ -120,9 +134,10 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         runStartForeground();
 
-        // Show the keep-alive overlay if the user enabled it. This is a no-op when the overlay is
-        // disabled or the "display over other apps" permission has not been granted.
-        FloatingStatusOverlay.getInstance(this).show();
+        // Prepare the keep-alive overlay. Constructing it registers it with the process wide
+        // foreground tracker, which decides whether it should be visible: it only shows once the
+        // whole app moves to the background.
+        FloatingStatusOverlay.getInstance(this);
 
         SystemEventReceiver.registerPackageUpdateEvents(this);
     }
@@ -193,6 +208,102 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
     public IBinder onBind(Intent intent) {
         Logger.logVerbose(LOG_TAG, "onBind");
         return mBinder;
+    }
+
+    /**
+     * Called when the user swipes the task away from the recents screen. The service is explicitly
+     * declared with {@code android:stopWithTask="false"}, so it keeps running, but some ROMs may
+     * still tear down the whole process. Nothing is killed here on purpose: the sessions must
+     * survive so that returning to Termux restores the exact same state.
+     */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        Logger.logDebug(LOG_TAG, "onTaskRemoved");
+
+        mTaskRemoved = true;
+
+        // Keep the overlay alive as a visible hint that the service is still running.
+        FloatingStatusOverlay.getInstance(this).show();
+
+        // Refresh the notification text so the user can tell the service survived the swipe.
+        // updateNotification() is not used since it would stop the service when nothing is running,
+        // which is not what a task removal should do.
+        refreshNotificationIfRunning();
+
+        super.onTaskRemoved(rootIntent);
+    }
+
+    /** Rebuilds the notification, but only while something is actually running. */
+    private void refreshNotificationIfRunning() {
+        if (!mShellManager.mTermuxSessions.isEmpty() || !mShellManager.mTermuxTasks.isEmpty()) {
+            ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
+                .notify(TermuxConstants.TERMUX_APP_NOTIFICATION_ID, buildNotification());
+        }
+    }
+
+    /**
+     * Clears the "still running in the background" hint from the notification once the user is back
+     * in the app. Called from {@link TermuxActivity#onResume()}.
+     */
+    public synchronized void clearTaskRemovedState() {
+        if (!mTaskRemoved) return;
+        mTaskRemoved = false;
+        refreshNotificationIfRunning();
+    }
+
+    /**
+     * Called by the system when memory is running low. Termux sessions are cheap to keep alive but
+     * each one holds a scrollback buffer, so when memory gets tight we drop old scrollback history
+     * of every session. The visible screen and the running shells are never touched, and the
+     * capacity is given back from {@link TermuxActivity#onResume()}.
+     * <p/>
+     * Only the {@code TRIM_MEMORY_RUNNING_*} levels are handled: the higher levels merely mean the
+     * app moved to the background, which is not memory pressure on its own.
+     */
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+
+        final int keepRows;
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+            keepRows = TRIM_TRANSCRIPT_ROWS_CRITICAL;
+        } else if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            keepRows = TRIM_TRANSCRIPT_ROWS_LOW;
+        } else {
+            return;
+        }
+
+        // Work on a snapshot: getTermuxSessions() hands out the live list and shrinking notifies the
+        // screen, so a session could otherwise be added or removed while this loop runs.
+        final List<TermuxSession> sessions;
+        synchronized (this) {
+            sessions = new ArrayList<>(mShellManager.mTermuxSessions);
+        }
+
+        int shrunkSessions = 0;
+        for (TermuxSession termuxSession : sessions) {
+            TerminalSession terminalSession = termuxSession.getTerminalSession();
+            if (terminalSession == null) continue;
+            if (terminalSession.getActiveTranscriptRows() <= keepRows) continue;
+            if (terminalSession.shrinkTranscript(keepRows)) shrunkSessions++;
+        }
+
+        if (shrunkSessions > 0) {
+            Logger.logInfo(LOG_TAG, "onTrimMemory(" + level + "): dropped scrollback history of " +
+                shrunkSessions + " session(s), keeping " + keepRows + " rows");
+        }
+    }
+
+    /**
+     * Restores the configured scrollback capacity of every session. Called when the app comes back
+     * to the foreground, where the memory pressure that triggered {@link #onTrimMemory(int)} is
+     * usually gone. Only the free capacity is allocated, the history is refilled lazily.
+     */
+    public synchronized void restoreSessionTranscripts() {
+        for (TermuxSession termuxSession : getTermuxSessions()) {
+            TerminalSession terminalSession = termuxSession.getTerminalSession();
+            if (terminalSession != null) terminalSession.restoreTranscript();
+        }
     }
 
     @Override
@@ -626,10 +737,32 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         updateNotification();
 
+        // Warn once when many sessions are open: each session is a separate shell process with its
+        // own scrollback buffer, so memory usage grows quickly on low end devices.
+        if (mShellManager.mTermuxSessions.size() > SESSION_COUNT_WARNING_THRESHOLD &&
+            !KeepAlivePreferences.isSessionCountWarningIgnored(this)) {
+            notifySessionCountWarning(mShellManager.mTermuxSessions.size());
+        }
+
         // No need to recreate the activity since it likely just started and theme should already have applied
         TermuxActivity.updateTermuxActivityStyling(this, false);
 
         return newTermuxSession;
+    }
+
+    /** Show a one time toast warning about the number of open sessions. */
+    private void notifySessionCountWarning(final int sessionCount) {
+        KeepAlivePreferences.setSessionCountWarningIgnored(this, true);
+
+        new Handler(getMainLooper()).post(() -> {
+            try {
+                Toast.makeText(this,
+                    getString(R.string.keep_alive_session_warning, sessionCount),
+                    Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Logger.logWarn(LOG_TAG, "Failed to show session count warning: " + e.getMessage());
+            }
+        });
     }
 
     /** Remove a TermuxSession. */
@@ -804,6 +937,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
         final boolean wakeLockHeld = mWakeLock != null;
         if (wakeLockHeld) notificationText += " (wake lock held)";
+        if (mTaskRemoved) notificationText += " · " + res.getString(R.string.notification_background_running);
 
 
         // Set notification priority
